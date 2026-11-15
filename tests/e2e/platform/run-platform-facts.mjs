@@ -2,7 +2,7 @@
 // Usage (repo root): node tests/e2e/platform/run-platform-facts.mjs [out.json]
 // Env: CHROME_PATH (default: local Google Chrome). Headless, temporary profile.
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import http from "node:http";
 import path from "node:path";
@@ -15,7 +15,7 @@ let puppeteer;
 for (const p of reqFrom) { try { puppeteer = createRequire(p)("puppeteer-core"); break; } catch { /* try next */ } }
 if (!puppeteer) throw new Error("puppeteer-core not found");
 const CHROME = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const out = { chrome: null, at: new Date().toISOString(), results: {} };
+const out = { chrome: null, mode: "headless", at: new Date().toISOString(), results: {} };
 const R = (id, verdict, evidence) => { out.results[id] = { verdict, evidence }; console.log(`${id}: ${verdict} — ${JSON.stringify(evidence)}`); };
 
 // Local test server: records every request so we can see whether a fetch actually left the extension.
@@ -31,18 +31,53 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
+// Control extension: identical probe, but with connect-src * so the V3 result can be attributed to the CSP.
+const ctrlDir = mkdtempSync(path.join(tmpdir(), "fb-probe-ctrl-"));
+cpSync(probeDir, ctrlDir, { recursive: true });
+const ctrlManifest = JSON.parse(readFileSync(path.join(ctrlDir, "manifest.json"), "utf8"));
+ctrlManifest.name = "Focus Buddy platform probe CONTROL (test only)";
+ctrlManifest.content_scripts = [];
+ctrlManifest.content_security_policy.extension_pages = ctrlManifest.content_security_policy.extension_pages.replace("connect-src 'self'", "connect-src *");
+writeFileSync(path.join(ctrlDir, "manifest.json"), JSON.stringify(ctrlManifest));
+
+// Hardened variant: applies the access level at top level on every SW evaluation and registers onStartup,
+// the pattern src/shell/sw.ts uses after Day 05 review F1. Its content script reports in data-v1h.
+const hardDir = mkdtempSync(path.join(tmpdir(), "fb-probe-hard-"));
+cpSync(probeDir, hardDir, { recursive: true });
+const hardManifest = JSON.parse(readFileSync(path.join(hardDir, "manifest.json"), "utf8"));
+hardManifest.name = "Focus Buddy platform probe HARDENED (test only)";
+writeFileSync(path.join(hardDir, "manifest.json"), JSON.stringify(hardManifest));
+writeFileSync(path.join(hardDir, "sw.js"), readFileSync(path.join(hardDir, "sw.js"), "utf8") +
+  '\nchrome.runtime.onStartup.addListener(() => {});\nchrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });\n');
+writeFileSync(path.join(hardDir, "cs.js"), readFileSync(path.join(hardDir, "cs.js"), "utf8").replaceAll("dataset.v1", "dataset.v1h"));
+
 const profile = mkdtempSync(path.join(tmpdir(), "fb-platform-"));
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, userDataDir: profile, enableExtensions: [probeDir] });
+const launch = () => puppeteer.launch({ executablePath: CHROME, headless: true, userDataDir: profile, enableExtensions: [probeDir, ctrlDir, hardDir] });
+let browser = await launch();
 try {
   out.chrome = await browser.version();
   console.log("browser:", out.chrome);
-  const swTarget = await browser.waitForTarget(t => t.type() === "service_worker" && t.url().endsWith("/sw.js"), { timeout: 15000 });
+  // Find both probe SWs and tell them apart by manifest name.
+  const deadline = Date.now() + 15000;
+  let swTargets = [];
+  while (swTargets.length < 3 && Date.now() < deadline) {
+    swTargets = browser.targets().filter(t => t.type() === "service_worker" && t.url().endsWith("/sw.js"));
+    await new Promise(r => setTimeout(r, 200));
+  }
+  let swTarget, ctrlSw, hardSw;
+  for (const t of swTargets) {
+    const w = await t.worker();
+    const name = await w.evaluate(() => chrome.runtime.getManifest().name);
+    if (name.includes("CONTROL")) ctrlSw = w; else if (name.includes("HARDENED")) hardSw = w; else swTarget = t;
+  }
+  if (!swTarget || !ctrlSw) throw new Error("probe or control SW not found");
   const extId = new URL(swTarget.url()).host;
   let sw = await swTarget.worker();
   const call = (w, fn, ...args) => w.evaluate((fn, args) => self.probe[fn](...args), fn, args);
 
   // V1: storage.local access level. Control first: content script can read by default.
   await call(sw, "seed");
+  await call(hardSw, "seed");
   const page = await browser.newPage();
   const readV1 = async () => {
     await page.goto(`${base}/page?${Date.now()}`, { waitUntil: "load" });
@@ -63,7 +98,11 @@ try {
   const n3 = hits.length;
   const v3 = await call(sw, "swFetch", `${base}/v3-sw`);
   const v3Left = hits.slice(n3).includes("/v3-sw");
-  R("V3", v3.startsWith("blocked") && !v3Left ? "YES (CSP blocks SW fetch)" : "NO (SW fetch not blocked by CSP)", { result: v3, requestReachedServer: v3Left });
+  const n3c = hits.length;
+  const v3c = await call(ctrlSw, "swFetch", `${base}/v3-ctrl`);
+  const v3cLeft = hits.slice(n3c).includes("/v3-ctrl");
+  R("V3", v3.startsWith("blocked") && !v3Left && v3cLeft ? "YES (CSP blocks SW fetch; control with connect-src * reaches the server)" : "NO/UNCLEAR",
+    { result: v3, requestReachedServer: v3Left, control: { result: v3c, requestReachedServer: v3cLeft } });
 
   // V4: fetch of a bundled file from an extension page (and control: external fetch from a page).
   const ep = await browser.newPage();
@@ -114,8 +153,40 @@ try {
 
   // V7 needs real focus changes from the side panel / notifications: headed manual check.
   R("V7", "NOT TESTED (needs headed Chrome and real focus; owner manual check)", {});
+  // V1b: does the access level survive a full browser restart (same profile)? Day 05 review finding F1.
+  await browser.close();
+  browser = await launch();
+  const p2 = await browser.newPage();
+  await p2.goto(`${base}/page?restart`, { waitUntil: "load" });
+  await p2.waitForFunction(() => document.documentElement.dataset.v1, { timeout: 5000 });
+  const afterRestart = await p2.evaluate(() => document.documentElement.dataset.v1);
+  await p2.waitForFunction(() => document.documentElement.dataset.v1h, { timeout: 5000 });
+  const hardAfterRestart = await p2.evaluate(() => document.documentElement.dataset.v1h);
+  R("V1-restart", afterRestart.startsWith("error") ? "PERSISTS across browser restart"
+    : afterRestart.includes("local-value") ? "RESETS on browser restart (must re-apply on every SW start)" : "INCONCLUSIVE",
+    { contentScriptAfterRestart: afterRestart });
+  // Was the hardened SW even running yet? Wake it (any evaluate does), then read again.
+  const hardTargets = browser.targets().filter(t => t.type() === "service_worker");
+  const swRunningAtFirstRead = hardTargets.length;
+  let hardWoken = null;
+  for (const t of hardTargets) {
+    const w = await t.worker();
+    if ((await w.evaluate(() => chrome.runtime.getManifest().name)).includes("HARDENED")) hardWoken = w;
+  }
+  await p2.goto(`${base}/page?restart2`, { waitUntil: "load" });
+  await p2.waitForFunction(() => document.documentElement.dataset.v1h, { timeout: 5000 });
+  const hardAfterWake = await p2.evaluate(() => document.documentElement.dataset.v1h);
+  out.results["V1-restart-detail"] = { swTargetsAfterRestart: swRunningAtFirstRead, hardenedSwFound: !!hardWoken, hardenedReadAfterWake: hardAfterWake };
+  console.log("V1-restart-detail:", JSON.stringify(out.results["V1-restart-detail"]));
+  R("V1-restart-hardened",
+    hardAfterRestart.startsWith("error") ? "PROTECTED immediately after restart"
+      : hardAfterWake.startsWith("error") ? "PROTECTED once the SW has run (a content script that runs before the SW's first evaluation after a restart can still read)"
+      : "NOT PROTECTED",
+    { firstReadAfterRestart: hardAfterRestart, readAfterSwRan: hardAfterWake });
 } finally {
   await browser.close();
+  rmSync(ctrlDir, { recursive: true, force: true });
+  rmSync(hardDir, { recursive: true, force: true });
   server.close();
   rmSync(profile, { recursive: true, force: true });
 }

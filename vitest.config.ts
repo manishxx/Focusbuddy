@@ -11,7 +11,8 @@ export default defineConfig({
       include: ["src/core/**/*.ts"],
       exclude: ["src/core/**/*.json"],
       reporter: [["text", { skipFull: false }], "text-summary"],
-      thresholds: { lines: 80 },
+      // Per file, so one well-tested module cannot hide an untested one.
+      thresholds: { lines: 80, perFile: true },
     },
   },
 });

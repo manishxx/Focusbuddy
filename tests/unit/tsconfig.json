@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node", "chrome"]
   },
-  "include": ["../../src/**/*.ts", "../../src/**/*.tsx", "../../src/**/*.json", "./**/*.ts", "../../vitest.config.ts"]
+  "include": ["../../src/**/*.ts", "../../src/**/*.tsx", "./**/*.ts", "../../vitest.config.ts", "../../scripts/*.d.mts"]
 }

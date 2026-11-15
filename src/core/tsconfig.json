@@ -1,0 +1,11 @@
+{
+  // src/core is pure (ADR-0001): no chrome types, no DOM or worker globals, so
+  // chrome, window, fetch, document and friends do not even type-check here.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ES2023"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

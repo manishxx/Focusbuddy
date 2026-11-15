@@ -1,0 +1,115 @@
+{
+  "chrome": "Chrome/157.0.8103.51",
+  "mode": "headless",
+  "at": "2026-11-15T18:48:43.915Z",
+  "results": {
+    "V1": {
+      "verdict": "YES",
+      "evidence": {
+        "contentScriptBefore": "read:{\"probeSecret\":\"local-value\"}",
+        "setAccessLevel": "ok",
+        "contentScriptAfter": "error:Access to storage is not allowed from this context."
+      }
+    },
+    "V2": {
+      "verdict": "OBSERVED",
+      "evidence": {
+        "reply": {
+          "url": "chrome-extension://jhmpleknmikjpkeilioecnaklbcbdghl/sw.js",
+          "id": "jhmpleknmikjpkeilioecnaklbcbdghl",
+          "origin": null,
+          "hasTab": false,
+          "documentId": null,
+          "frameId": null
+        },
+        "swUrl": "chrome-extension://jhmpleknmikjpkeilioecnaklbcbdghl/sw.js",
+        "getURL": "chrome-extension://jhmpleknmikjpkeilioecnaklbcbdghl/sw.js"
+      }
+    },
+    "V3": {
+      "verdict": "YES (CSP blocks SW fetch; control with connect-src * reaches the server)",
+      "evidence": {
+        "result": "blocked: Failed to fetch",
+        "requestReachedServer": false,
+        "control": {
+          "result": "allowed status 200",
+          "requestReachedServer": true
+        }
+      }
+    },
+    "V4": {
+      "verdict": "YES",
+      "evidence": {
+        "pageSelfFetch": "allowed 200 {\"pack\":\"probe\"}",
+        "swSelfFetch": "allowed status 200",
+        "pageExternalFetch": "blocked: Failed to fetch",
+        "pageExternalReachedServer": false
+      }
+    },
+    "V5": {
+      "verdict": "NOT OBSERVABLE (design already re-sets it on every SW start)",
+      "evidence": {
+        "setDetectionInterval": "set"
+      }
+    },
+    "UX-3": {
+      "verdict": "OBSERVED",
+      "evidence": {
+        "chrome": "Chrome/157.0.8103.51",
+        "warnings": [
+          "Read your browsing history",
+          "Display notifications"
+        ]
+      }
+    },
+    "V8": {
+      "verdict": "YES",
+      "evidence": {
+        "coverWins": false,
+        "hitIsHost": true,
+        "modal": true,
+        "pageButtonFocusable": false,
+        "showModal": "ok"
+      }
+    },
+    "UX-5": {
+      "verdict": "YES (page inert while modal)",
+      "evidence": {
+        "modal": true,
+        "pageButtonFocusable": false
+      }
+    },
+    "V6": {
+      "verdict": "YES (cleared on reload)",
+      "evidence": {
+        "reloadVia": "browser.installExtension(same path)",
+        "before": {
+          "probeSession": 1794768525329
+        },
+        "afterReload": {}
+      }
+    },
+    "V7": {
+      "verdict": "NOT TESTED (needs headed Chrome and real focus; owner manual check)",
+      "evidence": {}
+    },
+    "V1-restart": {
+      "verdict": "RESETS on browser restart (must re-apply on every SW start)",
+      "evidence": {
+        "contentScriptAfterRestart": "read:{\"probeSecret\":\"local-value\"}"
+      }
+    },
+    "V1-restart-detail": {
+      "swTargetsAfterRestart": 3,
+      "hardenedSwFound": true,
+      "hardenedReadAfterWake": "error:Access to storage is not allowed from this context."
+    },
+    "V1-restart-hardened": {
+      "verdict": "PROTECTED once the SW has run (a content script that runs before the SW's first evaluation after a restart can still read)",
+      "evidence": {
+        "firstReadAfterRestart": "read:{\"probeSecret\":\"local-value\"}",
+        "readAfterSwRan": "error:Access to storage is not allowed from this context."
+      }
+    }
+  }
+}

@@ -44,7 +44,7 @@ To try the build by hand, open `chrome://extensions`, turn on Developer mode, ch
 | `format:check` | Prettier |
 | `lint:messages` | Banned-phrase and length lint for the message bank (`src/core/messages/`) |
 | `check:manifest` | Fails if the manifest's permissions, CSP or other guarded keys differ from SECURITY.md |
-| `check:secrets` | Scans files git knows about for private keys, tokens and `.env` files |
+| `check:secrets` | Scans files git knows about (or `-- --dir dist`) for private keys, tokens, password literals and secret-looking files |
 | `test` / `test:coverage` | Vitest; coverage needs at least 80 % of lines in `src/core/` |
 | `e2e:smoke` | Puppeteer smoke test against local Chrome. Set `CHROME_PATH` to use another binary |
 

@@ -322,15 +322,20 @@ Not requested: `history`, `webNavigation`, `webRequest`, `cookies`, `activeTab`,
 
 ---
 
-## 13. Platform facts to verify on Day 05 (from the Day 03 reviews)
+## 13. Platform facts (verified Day 05)
 
-| # | Question | Fallback if the answer is "no" |
-|---|---|---|
-| V1 | Does `storage.local.setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"})` work on Chrome 120+? | Keep nothing sensitive in storage.local. The design already keeps no titles; move the task label and objective to IndexedDB |
-| V2 | What is `sender.url` for messages sent *from the SW* (needed for the offscreen check)? | Use a port opened by the offscreen document to the SW |
-| V3 | Does `extension_pages` CSP cover the SW's `fetch`? | Lint plus the AC-10 interception test remain the guarantee |
-| V4 | Does `connect-src 'self'` allow `fetch` of bundled files (topic packs)? | Import packs as JS modules instead |
-| V5 | Does `idle.setDetectionInterval` persist across SW restarts? | Already re-set on every start |
-| V6 | Is `storage.session` cleared on extension reload/update? | Already republished on start |
-| V7 | Does `WINDOW_ID_NONE` fire briefly when the side panel or a notification takes focus? | Debounce BROWSER_UNFOCUSED by 2 s |
-| V8 | Can the overlay use a top-layer `<dialog>`/popover from an isolated-world script? | Keep a fixed-position host with maximum z-index |
+Probe: `tests/e2e/platform/` (test-only extension + local HTTP server that records whether a request really left the browser). Evidence: `tests/e2e/platform/results-day05.json`. **All results are Chrome 157.0.8103.51, headless, macOS.** Chrome 120 (the minimum) was not tested, because the owner hasn't approved the Chrome for Testing download. Every "yes" below is therefore "yes on 157" until Day 05's Chrome 120 item is closed.
+
+| # | Question | Day 05 result | Design consequence |
+|---|---|---|---|
+| V1 | Does `storage.local.setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"})` work? | **Yes.** A content script read `storage.local` before the call and got "Access to storage is not allowed from this context" after it. **It does not survive a browser restart**: after relaunching the same profile the content script could read again (it does survive a SW stop, per the reviewer). | **Re-apply at top level on every SW evaluation**, not only in `onInstalled`/`onStartup` (Day 05 review F1, fixed in `src/shell/sw.ts`). A hardened probe showed that a content script running *before* the SW's first evaluation after a restart can still read; once the SW has run it's blocked. Focus Buddy declares no content scripts, and its only one (the overlay) is injected by the SW, so **the SW must await `harden()` before any `executeScript`** (SECURITY R7) |
+| V2 | What is `sender.url` for messages sent from the SW to the offscreen document? | `chrome-extension://<id>/sw.js` exactly (= `getURL("sw.js")`); no `tab`, `frameId` or `documentId`; `id` = own id | The offscreen check can be exact: `sender.id === runtime.id && sender.url === getURL("sw.js") && !sender.tab` |
+| V3 | Does the `extension_pages` CSP cover the SW's `fetch`? | **Yes.** The SW fetch to a local server was blocked and never reached it. A control extension, identical except `connect-src *`, did reach the server (200), so the block is the CSP | CSP is a real layer for the SW. Lint and the AC-10 test stay, because the CSP doesn't cover content scripts or WebRTC |
+| V4 | Does `connect-src 'self'` allow `fetch` of bundled files? | **Yes**, from both a page and the SW (200). An external fetch from a page was blocked and didn't reach the server | Topic packs may be fetched or imported. ADR-0007's lint still bans `fetch`, so packs are imported as modules unless a vetted helper is added |
+| V5 | Does `idle.setDetectionInterval` persist across SW restarts? | **Not observable** (no getter) | Already re-set on every SW start |
+| V6 | Is `storage.session` cleared on extension reload? | **Yes**, for a reload done by loading the same unpacked path again; the reviewer confirmed the SW really restarted. `chrome.runtime.reload()` couldn't be tested (in this harness it left the probe disabled), and a Web Store update wasn't tested | Snapshot is republished on start (already in the design) |
+| V7 | Does `WINDOW_ID_NONE` fire briefly when the side panel or a notification takes focus? | **Not tested** (needs headed Chrome and real focus changes). Owner manual check M20 | Debounce BROWSER_UNFOCUSED by 2 s until verified |
+| V8 | Can the overlay use a top-layer `<dialog>` from an isolated-world script? | **Yes.** `showModal()` from a closed shadow root: `:modal` true; the hit-test lands on the host; a page button can't take focus; a max-z-index page element can't cover it. Headless; focus tested with programmatic `focus()` | Overlay = `showModal()` dialog (UX F5); fallback L2 |
+| UX-3 | Chrome's install warnings for the real manifest | `["Read your browsing history", "Display notifications"]` from `management.getPermissionWarningsByManifest` (required permissions only; the optional host prompt wasn't captured) | Onboarding wording confirmed exactly |
+| UX-5 | Page inert while the overlay is modal | Yes (see V8) | — |
+| UX-6 | Toolbar colours vs badge fills | **Not tested** (headless has no toolbar). Owner manual check M21 | Badge meaning carried by text (UX §2.1) |

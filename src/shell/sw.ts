@@ -3,50 +3,27 @@
  * synchronously at the top level so Chrome can wake the worker for them.
  * Day 05 scaffold: no tab, idle or alarm handling yet.
  */
+import { harden, type HardeningApi } from "./hardening";
 
-/** Diagnostic codes from start-up hardening (codes only, never user data). */
-export const startupErrors: string[] = [];
+// Explicit wrappers: chrome APIs are only ever called directly (lint rule fb/chrome-access).
+const api: HardeningApi = {
+  storage: {
+    local: { setAccessLevel: (options) => chrome.storage.local.setAccessLevel(options) },
+    session: { set: (items) => chrome.storage.session.set(items) },
+  },
+  sidePanel: { setPanelBehavior: (behavior) => chrome.sidePanel.setPanelBehavior(behavior) },
+};
 
-function record(code: string, error: unknown): void {
-  const detail = error instanceof Error ? error.name : "unknown";
-  startupErrors.push(`${code}:${detail}`);
-  console.warn(`[focus-buddy] ${code}`, detail);
-}
-
-async function restrictStorage(): Promise<void> {
-  try {
-    // SECURITY §7: content scripts must not read chrome.storage.local.
-    await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
-  } catch (error) {
-    record("E_STORAGE_ACCESS_LEVEL", error);
-  }
-}
-
-async function configureSidePanel(): Promise<void> {
-  try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-  } catch (error) {
-    record("E_SIDE_PANEL_BEHAVIOR", error);
-  }
-}
-
-async function onLifecycle(): Promise<void> {
-  await restrictStorage();
-  await configureSidePanel();
-  if (startupErrors.length > 0) {
-    try {
-      await chrome.storage.session.set({ "diag.startupErrors": [...startupErrors] });
-    } catch {
-      // Nothing more we can do without user data; the console code above remains.
-    }
-  }
-}
+// Runs on every evaluation of the worker: first install, browser start, and every
+// wake-up after the worker was stopped (the access level is not persisted).
+const ready: Promise<string[]> = harden(api, "evaluate");
 
 chrome.runtime.onInstalled.addListener(() => {
-  // Opens nothing on install yet (onboarding arrives later).
-  void onLifecycle();
+  // Opens nothing on install yet (onboarding arrives later). Re-applying is
+  // idempotent and covers an install that races the top-level call.
+  void ready.then(() => harden(api, "installed"));
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void onLifecycle();
+  void ready.then(() => harden(api, "startup"));
 });

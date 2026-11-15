@@ -22,6 +22,15 @@ const PAGES = {
   offscreen: "offscreen/offscreen.html",
 };
 
+const ALLOWED_JS_URLS = new Set([
+  "http://www.w3.org/2000/svg",
+  "http://www.w3.org/1998/Math/MathML",
+  "http://www.w3.org/1999/xlink",
+  "http://www.w3.org/XML/1998/namespace",
+  "http://www.w3.org/1999/xhtml",
+  "https://react.dev/errors/",
+]);
+
 const common = {
   configFile: false,
   root: src,
@@ -127,7 +136,23 @@ function verifyOutput(list) {
     problems.push("overlay.js: contains import/export (must be a classic script)");
   if (/FocusBuddyOverlay/.test(overlay)) problems.push("overlay.js: defines a global (must set nothing on window)");
   const sw = readFileSync(join(dist, "sw.js"), "utf8");
-  if (/\bimport\s*(\(|["'{*])/.test(sw)) problems.push("sw.js: imports another file (must be one module)");
+  if (/\bimport\b[^;]*\bfrom\s*["']/.test(sw) || /\bimport\s*["'(]/.test(sw) || /\bexport\b[^;]*\bfrom\s*["']/.test(sw))
+    problems.push("sw.js: imports another file (must be one module)");
+  // Remote URLs in JS: only known, inert strings (XML namespaces, React's error-page
+  // prefix used in thrown messages) are allowed, by exact match.
+  for (const f of list.filter((x) => x.endsWith(".js"))) {
+    const js = readFileSync(join(dist, f), "utf8");
+    for (const url of js.match(/(?:https?|wss?|ftp):\/\/[^\s"'`)\\]*/gi) ?? [])
+      if (!ALLOWED_JS_URLS.has(url)) problems.push(`${f}: remote URL ${url}`);
+    if (/["'`]\/\/[a-z0-9.-]+\.[a-z]{2,}\//i.test(js)) problems.push(`${f}: protocol-relative URL`);
+  }
+  for (const f of list.filter((x) => x.endsWith(".css"))) {
+    const css = readFileSync(join(dist, f), "utf8");
+    if (/@import/i.test(css)) problems.push(`${f}: @import`);
+    for (const [, value] of css.matchAll(/url\(\s*["']?([^"')]*)/gi))
+      if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim()) && !/^data:/i.test(value.trim()))
+        problems.push(`${f}: remote url(${value})`);
+  }
   for (const required of ["sw.js", "overlay.js", "manifest.json", ...Object.keys(PAGES).map((p) => `${p}.html`)])
     if (!list.includes(required)) problems.push(`missing ${required}`);
   if (problems.length) {

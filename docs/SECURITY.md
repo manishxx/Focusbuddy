@@ -42,7 +42,7 @@
 | `contextMenus` | Pause/Resume, Stop, "Mute and pause" on the toolbar icon (FR-S6, FR-I11) | none | — |
 | optional `http://*/*`, `https://*/*` | Show the Strict overlay on the page the user drifted to (SD-2). Requested only when the user turns the overlay on. Narrower than `<all_urls>` (no `file://`) | *"Read and change all your data on all websites"* (at request time) | Never used to read page content; removable from settings and offered on delete-all |
 
-**Manifest also declares:** `commands` (global "Mute and pause" shortcut), `minimum_chrome_version: "120"` (provisional, SD-1), and incognito `spanning` (the default; filtered in code). **Not requested:** `history`, `webNavigation`, `webRequest`, `cookies`, `activeTab`, `unlimitedStorage`, `identity`, native messaging, `web_accessible_resources`.
+**Manifest also declares:** `commands` (global "Mute and pause" shortcut), `minimum_chrome_version: "120"` (provisional, SD-1), and **no `incognito` key** (Chrome's default, `spanning`, applies; incognito is filtered in code; the manifest guard rejects any `incognito` key). **Not requested:** `history`, `webNavigation`, `webRequest`, `cookies`, `activeTab`, `unlimitedStorage`, `identity`, native messaging, `web_accessible_resources`.
 
 ## 4. Threats and mitigations
 
@@ -80,6 +80,7 @@
 - R4: Title-based classification can be wrong both ways. Mitigated by UX (one-click "relevant", UNCERTAIN never interrupts).
 - R5: Sites can detect the overlay (T18).
 - R6: Crash reports may contain in-memory data (T23, unverified).
+- R7: `storage.local.setAccessLevel` resets on browser restart (Day 05, Chrome 157). Until the SW's first evaluation, an extension content script could read `storage.local`. Focus Buddy declares no content scripts; the overlay is injected only by the SW **after** `harden()` resolves (checklist item; Day 09 test). storage.local holds no titles (D-015). Low.
 
 ## 6. Content Security Policy
 
@@ -94,6 +95,7 @@
 ## 7. Security requirements for implementation (checklist for Day 05+ reviews)
 
 - [ ] `core/*` has no `chrome.*` imports; no `fetch`/`XMLHttpRequest`/`WebSocket`/`EventSource`/`sendBeacon` anywhere (lint).
+- [ ] SW awaits `harden()` (access level + panel behaviour) before any `executeScript` (R7).
 - [ ] Manifest CSP exactly as in §6; no `externally_connectable`, no `web_accessible_resources`.
 - [ ] Every message validated against its schema; sender class checked with exact matching; no `onMessage` listener outside the SW and offscreen.
 - [ ] Nothing persisted before the exclusion check; no title or path in any stored record (automated store scan in tests).

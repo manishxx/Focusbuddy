@@ -4,6 +4,7 @@ import {
   PLACEHOLDER_LIMITS,
   format,
   hasMessage,
+  stripBidiControls,
   truncate,
   variantCount,
   type MessageKey,
@@ -24,6 +25,15 @@ describe("truncate", () => {
   it("does not split surrogate pairs", () => {
     const emoji = "😀".repeat(10);
     expect(truncate(emoji, 5)).toBe("😀😀😀😀" + ELLIPSIS);
+  });
+  it("counts grapheme clusters, not code points", () => {
+    const family = "👨‍👩‍👧"; // 5 code points, 1 grapheme
+    expect(truncate(family.repeat(3), 3)).toBe(family.repeat(3));
+    expect(truncate(family.repeat(10), 5)).toBe(family.repeat(4) + ELLIPSIS);
+    const accented = "e\u0301"; // e + combining acute
+    expect(truncate(accented.repeat(6), 4)).toBe(accented.repeat(3) + ELLIPSIS);
+    const flag = "🇳🇱";
+    expect(truncate(flag.repeat(5), 2)).toBe(flag + ELLIPSIS);
   });
   it("handles a limit of zero or one", () => {
     expect(truncate("abc", 1)).toBe(ELLIPSIS);
@@ -62,6 +72,36 @@ describe("format", () => {
 
   it("does not truncate other placeholders", () => {
     expect(format("relevant.confirmHost", { host: long(100), task: "T" })).toContain(long(100));
+  });
+
+  it("strips bidi controls from placeholder values", () => {
+    const controls = [
+      "\u202A",
+      "\u202B",
+      "\u202C",
+      "\u202D",
+      "\u202E",
+      "\u2066",
+      "\u2067",
+      "\u2068",
+      "\u2069",
+      "\u200E",
+      "\u200F",
+    ];
+    for (const c of controls) {
+      expect(stripBidiControls(`a${c}b`)).toBe("ab");
+      expect(format("overlay.title", { task: `${c}Essay${c}` })).toBe("Back to Essay?");
+    }
+    expect(format("relevant.confirmHost", { host: "\u202Eevil.example", task: "T" })).toBe(
+      "Done. evil.example now counts as part of T.",
+    );
+    // Stripped before truncation, so controls don't use up the limit.
+    const out = format("overlay.title", { task: "\u202E".repeat(50) + "x".repeat(40) });
+    expect(out).toBe(`Back to ${"x".repeat(40)}?`);
+  });
+
+  it("keeps ordinary non-Latin text and ZWJ sequences", () => {
+    expect(stripBidiControls("مرحبا 👨‍👩‍👧 שלום")).toBe("مرحبا 👨‍👩‍👧 שלום");
   });
 
   it("does not re-expand placeholders inside values", () => {

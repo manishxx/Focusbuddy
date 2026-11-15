@@ -11,7 +11,7 @@ export type MessageVars = Readonly<Record<string, string | number>>;
 const messages: Readonly<Record<string, string | readonly string[]>> = bank.messages;
 
 /**
- * Maximum length, in characters (Unicode code points) including the ellipsis,
+ * Maximum length, in characters (grapheme clusters) including the ellipsis,
  * of user-supplied placeholder values (UX_GUIDELINES §5 rule 10).
  */
 export const PLACEHOLDER_LIMITS: Readonly<Record<string, number>> = Object.freeze({
@@ -24,11 +24,24 @@ export const PLACEHOLDER_LIMITS: Readonly<Record<string, number>> = Object.freez
 
 export const ELLIPSIS = "…";
 
-/** Truncate `text` to at most `limit` code points, ending with "…" if cut. */
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * Bidirectional embedding/override/isolate and direction marks
+ * (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F). Stripped from placeholder
+ * values so user text can't reorder the surrounding copy ("Trojan Source").
+ */
+const BIDI_CONTROLS = /[\u202A-\u202E\u2066-\u2069\u200E\u200F]/g;
+
+export function stripBidiControls(text: string): string {
+  return text.replace(BIDI_CONTROLS, "");
+}
+
+/** Truncate `text` to at most `limit` grapheme clusters, ending with "…" if cut. */
 export function truncate(text: string, limit: number): string {
-  const chars = Array.from(text);
-  if (chars.length <= limit) return text;
-  return chars.slice(0, Math.max(0, limit - 1)).join("") + ELLIPSIS;
+  const parts = Array.from(graphemes.segment(text), (s) => s.segment);
+  if (parts.length <= limit) return text;
+  return parts.slice(0, Math.max(0, limit - 1)).join("") + ELLIPSIS;
 }
 
 export function hasMessage(key: string): key is MessageKey {
@@ -50,7 +63,8 @@ function raw(key: string): string | readonly string[] {
 
 /**
  * Fill a bank string. Throws on an unknown key, an out-of-range variant or a
- * placeholder with no value. User placeholders are truncated per rule 10.
+ * placeholder with no value. Bidi controls are stripped from every value, then
+ * user placeholders are truncated per rule 10.
  */
 export function format(key: MessageKey, vars: MessageVars = {}, variant = 0): string {
   const value = raw(key);
@@ -68,7 +82,7 @@ export function format(key: MessageKey, vars: MessageVars = {}, variant = 0): st
     if (!Object.prototype.hasOwnProperty.call(vars, name)) {
       throw new Error(`Message ${key} needs a value for {${name}}`);
     }
-    const text = String(vars[name]);
+    const text = stripBidiControls(String(vars[name]));
     const limit = PLACEHOLDER_LIMITS[name];
     return limit === undefined ? text : truncate(text, limit);
   });
