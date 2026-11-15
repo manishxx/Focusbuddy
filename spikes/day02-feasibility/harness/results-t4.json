@@ -1,0 +1,37 @@
+{
+  "ranAt": "2026-11-15T05:28:11.292Z",
+  "out": {
+    "phase1_natural": {
+      "alarms": [
+        {
+          "atS": 30,
+          "lateMs": 3
+        },
+        {
+          "atS": 60,
+          "lateMs": 0
+        }
+      ],
+      "sw_starts": 1,
+      "sw_target_count_every_5s": "111111111111111"
+    },
+    "phase2_stop": {
+      "ok": true
+    },
+    "phase2_sw_targets_after_stop": 0,
+    "phase2_after": {
+      "sw_starts_total": 2,
+      "sw_starts_after_stop_s": [
+        15
+      ],
+      "alarms_after_stop_s": [
+        15
+      ],
+      "alarms_registered": [
+        "tick",
+        "persist-probe"
+      ],
+      "log_entries": 10
+    }
+  }
+}

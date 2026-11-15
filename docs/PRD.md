@@ -207,7 +207,8 @@ Priority: **P0** = needed for the V1 Definition of Done · **P1** = planned for 
 | ID | Requirement | Pri |
 |---|---|---|
 | FR-D1 | Feasibility study (usage-access permission, background limits, Play policy, sync options) delivered as a document. | P1 |
-| FR-D2 | Minimal companion (join session, detect permitted foreground app use, phone reminder, minimal status to desktop) — **only if the Day 22 gate passes**. | P2 |
+| FR-D2 | Minimal companion (join session by QR, detect permitted foreground app use, phone reminder) — **only if the Day 22 gate passes and a device is confirmed**. | P2 |
+| FR-D3 | Minimal session status from phone to desktop. **Deferred**: needs a relay backend, which D-003 blocks (FEASIBILITY §5). | P2-deferred |
 
 ### 5.11 Behaviour rules (resolve edge cases)
 | ID | Rule |

@@ -1,23 +1,24 @@
 # Task board
 
-## Done (Day 01)
-- [x] D01-A1 Analyse vision → journeys J1–J10 (SESSION_LOGS/DAY01_A.md)
-- [x] D01-B1 Write PRD v0.x (docs/PRD.md)
-- [x] D01-B2 Create project-management skeleton
-- [x] D01-C1 Independent PRD review (subagent) and fixes (17 findings applied → PRD v0.3)
+## Done
+- [x] Day 01: PRD v0.3, project skeleton, independent review (see DAILY_LOGS/DAY_01.md)
+- [x] D02-A1 Official-docs research (18 questions)
+- [x] D02-B1–B5d Spikes: tabs/windows, idle, side panel gesture, offscreen audio, notifications, overlay permission, alarms + SW restart
+- [x] D02-B6 Android desk note (FEASIBILITY §5)
+- [x] D02-C1 docs/FEASIBILITY.md + independent review (14 findings applied)
 
-## Next (Day 02 — Feasibility)
-- [ ] D02-A1 Check official docs: `tabs`, `windows`, `idle`, `sidePanel`, `offscreen`, `notifications`, `alarms`, `scripting`, `permissions` (optional host permissions)
-- [ ] D02-B1 Spike: minimal MV3 extension logging tab activation/title updates across 2 windows
-- [ ] D02-B2 Spike: `chrome.idle` states with a 15 s threshold
-- [ ] D02-B3 Spike: side panel persists across tab navigation
-- [ ] D02-B4 Spike: offscreen-document audio playback
-- [ ] D02-B5 Spike: overlay injection via optional host permission vs `activeTab` (answers PRD OQ-1)
-- [ ] D02-B5b Spike: does a notification click allow `sidePanel.open()`? (PRD OQ-7); 2-button limit on macOS; `getPermissionLevel`
-- [ ] D02-B5c Spike: `chrome.commands` global shortcut on `chrome://` pages; side panel in incognito spanning mode (OQ-8)
-- [ ] D02-B5d Confirm minimum Chrome 120 (alarms 30 s period) — PRD NFR-11
-- [ ] D02-B6 Desk note: Android usage-access/background limits/Play policy
-- [ ] D02-C1 Write docs/FEASIBILITY.md; owner runs the manual spike checklist in real Chrome
+## Waiting on owner
+- [ ] **D02-M Run `spikes/day02-feasibility/MANUAL_CHECKLIST.md` (M1–M19) in real Chrome.** Paste the results into chat or into the checklist file. Not blocking Day 3. Blocks final sign-off of FEASIBILITY rows marked Vh/U.
+- [ ] Confirm whether a physical Android device is available (PRD OQ-5). Needed before Day 22.
+
+## Next (Day 03 — Architecture)
+- [ ] D03-A1 Component boundaries & data flow (SW, side panel, offscreen, content script, intervention page)
+- [ ] D03-A2 Persistence choice: `chrome.storage` vs IndexedDB (PRD OQ-2)
+- [ ] D03-B1 docs/ARCHITECTURE.md with diagrams; docs/API_CONTRACTS.md (message schemas, sender validation per FEASIBILITY §7)
+- [ ] D03-B2 docs/DATA_MODEL.md (records, retention tiers, migrations)
+- [ ] D03-B3 docs/SECURITY.md threat model + permission justification table (incl. `contextMenus`, optional `<all_urls>`)
+- [ ] D03-C1 Independent architecture/performance/privacy review; ADRs in docs/DECISIONS/; PRD baseline approval (v1.0)
 
 ## Backlog
 See [FEATURE_REGISTRY.md](FEATURE_REGISTRY.md) and [30_DAY_ROADMAP.md](30_DAY_ROADMAP.md).
+Day 05 note: running the harness on Chrome for Testing 120 needs an owner-approved download (FEASIBILITY OQ-4).

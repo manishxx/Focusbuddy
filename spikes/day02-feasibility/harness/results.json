@@ -1,0 +1,89 @@
+{
+  "ranAt": "2026-11-15T05:25:52.467Z",
+  "results": {
+    "chrome_version": "Chrome/157.0.8103.51",
+    "extension_id": "makbaohpkmeiplfieldjcpofifikmhic",
+    "T1_tab_events": {
+      "tab_activated": 3,
+      "tab_updated_title": 4,
+      "window_focus": 1,
+      "titles_seen": [
+        "127.0.0.1:50644/page?title=Pattern Recognition — Chapter 1 (Google Classroom)",
+        "Pattern Recognition — Chapter 1 (Google Classroom)",
+        "about:blank",
+        "127.0.0.1:50644/page?title=K Nearest Neighbors Explained - YouTube",
+        "K Nearest Neighbors Explained - YouTube",
+        "Top 10 Football Goals - YouTube",
+        "127.0.0.1:50644/page?title=Second window — Google Scholar",
+        "Second window — Google Scholar"
+      ],
+      "football_title_events": 1
+    },
+    "T3_idle_query": "active",
+    "T4a_alarms": [
+      {
+        "name": "tick",
+        "periodInMinutes": 0.5,
+        "persistAcrossSessions": true,
+        "scheduledTime": 1794720334945.838
+      },
+      {
+        "name": "persist-probe",
+        "persistAcrossSessions": true,
+        "scheduledTime": 1794723904945.886
+      }
+    ],
+    "T5_offscreen_audio": {
+      "ok": true,
+      "state": "running",
+      "volume": 0.30000001192092896
+    },
+    "T6_notif_permission_level": "granted",
+    "T6_notif_2_buttons": {
+      "id": "e1c7ef89-7fb6-47a2-9191-ae31a223d3c4",
+      "level": "granted"
+    },
+    "T6_notif_3_buttons": {
+      "id": "c22dd9ce-5651-4fe8-b34e-9da0b5aa2db9",
+      "level": "granted"
+    },
+    "T7a_host_permission_granted": {
+      "granted": false
+    },
+    "T7a_overlay_http_no_permission": {
+      "ok": false,
+      "e": "Cannot access contents of url \"http://127.0.0.1:50644/page?title=Pattern%20Recognition%20%E2%80%94%20Chapter%201%20(Google%20Classroom)\". Extension manifest must request permission to access this host."
+    },
+    "T7a_overlay_chrome_page": {
+      "ok": false,
+      "e": "Cannot access a chrome:// URL"
+    },
+    "T8_sidepanel_open_no_gesture": {
+      "ok": false,
+      "e": "`sidePanel.open()` may only be called in response to a user gesture."
+    },
+    "T8_panel_behavior": {
+      "openPanelOnActionClick": true
+    },
+    "T4b_terminate_sw": {
+      "success": true
+    },
+    "T4b_after_restart": {
+      "sw_targets_3s_after_kill": 1,
+      "sw_starts_before": 1,
+      "sw_starts_after": 1,
+      "sw_start_times_after_kill_ms": [],
+      "alarms_after_kill": [],
+      "log_entries_survived": 28
+    },
+    "T7b_overlay_with_permission": {
+      "ok": true
+    },
+    "T7b_overlay_present": true,
+    "T7b_overlay_after_escape": false,
+    "T7b_overlay_events": [
+      "shown",
+      "escape"
+    ]
+  }
+}

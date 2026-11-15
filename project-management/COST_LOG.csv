@@ -4,3 +4,7 @@ Date,Development day,Agent,Model,Task,Input tokens,Output tokens,Estimated cost,
 2026-11-15,1,Orchestrator,claude-opus-5-5,Day 1 Session B PRD and PM files,unknown,unknown,unknown,unknown,Completed
 2026-11-15,1,Independent reviewer (subagent),opus (exact version unknown),Day 1 Session C PRD review,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES; 72290 total tokens reported by harness (input/output split unknown)"
 2026-11-15,1,Orchestrator,claude-opus-5-5,Day 1 Session C fixes logs commit,unknown,unknown,unknown,unknown,Completed
+2026-11-15,2,Research (subagent),sonnet (exact version unknown),Day 2 Session A Chrome/Android API research,unknown,unknown,unknown,unknown,"Completed; 104408 total tokens reported by harness"
+2026-11-15,2,Orchestrator,claude-opus-5-5,Day 2 Session B spikes and harness runs,unknown,unknown,unknown,unknown,Completed (1 harness run failed and was fixed)
+2026-11-15,2,Independent reviewer (subagent),opus (exact version unknown),Day 2 Session C feasibility review,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES; 80713 total tokens reported by harness"
+2026-11-15,2,Orchestrator,claude-opus-5-5,Day 2 Session C fixes logs commit,unknown,unknown,unknown,unknown,Completed

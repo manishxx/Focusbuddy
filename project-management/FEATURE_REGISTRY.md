@@ -26,7 +26,7 @@ Requirement IDs refer to [docs/PRD.md](../docs/PRD.md). The acceptance criteria 
 | F-018 | Session summary | P0 | FR-H3, AC-14 | 20–21 | Tier 3 + review | NOT_STARTED | — | — | — | F-008 | — |
 | F-019 | Privacy controls, data deletion, "view what's recorded" | P0 | FR-H4, FR-H6, AC-12 | 20 | Tier 2 | NOT_STARTED | — | — | — | F-010 | — |
 | F-020 | Onboarding & permission explanations | P0 | J1, NFR-6 | 13–20 | Tier 3 + review | NOT_STARTED | — | — | — | F-009 | — |
-| F-021 | Android feasibility study | P1 | FR-D1 | 02 (desk), 22 (gate) | Architect | NOT_STARTED | — | — | — | — | — |
+| F-021 | Android feasibility study | P1 | FR-D1 | 02 (desk), 22 (gate) | Architect | IN_PROGRESS (desk note done Day 02; gate Day 22) | docs/FEASIBILITY.md §5 | n/a | Day 02 subagent review | OQ-5 device | Day 02 commit |
 | F-023 | Adaptive mode rules | P1 | FR-I4 | 20 | Tier 2 | NOT_STARTED | — | — | — | F-011, F-017 | — |
 | F-024 | Network-silence guarantee (no requests without AI opt-in) | P0 | NFR-5, AC-10 | 14, 21 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |
 | F-025 | Browser-unfocused neutral state | P1 | FR-M8 | 09 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |

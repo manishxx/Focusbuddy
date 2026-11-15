@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Focus Buddy spike panel</title>
+<style>
+  body{font:14px system-ui;margin:12px;color:#111;background:#fff}
+  button{display:block;width:100%;margin:6px 0;padding:10px;font:inherit;border-radius:8px;border:1px solid #888;background:#f4f4f6;cursor:pointer}
+  pre{white-space:pre-wrap;font-size:11px;background:#f6f6f6;padding:8px;max-height:50vh;overflow:auto}
+</style>
+<h1 style="font-size:16px">Day 2 spike</h1>
+<button id="notify">1. Show notification (2 buttons)</button>
+<button id="notify3">2. Try notification with 3 buttons</button>
+<button id="sound">3. Play sound (offscreen)</button>
+<button id="perm">4. Request host permission (needs click)</button>
+<button id="overlay">5. Inject overlay into active tab</button>
+<button id="clear">Clear log</button>
+<p id="status" role="status"></p>
+<pre id="log" aria-label="Event log"></pre>
+<script src="sidepanel.js"></script>
+</html>
