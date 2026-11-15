@@ -8,7 +8,7 @@
 | Last completed task | D02-C1 FEASIBILITY.md + independent review |
 | Verified completed features | F-000 PRD: `REVIEWED`. F-021 Android feasibility: desk note done, gate on Day 22 |
 | Pending tasks | Day 03 list in [TASK_BOARD.md](TASK_BOARD.md) |
-| Known blockers | None for Day 03. Owner items: manual checklist M1–M19; Android device (OQ-5); approval to download Chrome for Testing 120 (Day 05) |
+| Known blockers | None for Day 03. Owner items: manual checklist (6 of 19 done; notifications not visible on macOS, see FEASIBILITY §4); Android device (OQ-5); approval to download Chrome for Testing 120 (Day 05) |
 | Last test results | Day 02 spike harness (headless Chrome 157): see docs/FEASIBILITY.md §1 and §3. Clean SW-restart run passed; first run inconclusive (disclosed) |
 | Current Git branch | `main` (Day 02 work came from `feat/day-02-feasibility`) |
 | Last successful commit | Day 02 commit, the commit that last changed this file (`git log -1 -- project-management/CURRENT_STATE.md`) |

@@ -5,7 +5,7 @@
 | Day | 02 (2026-11-15) |
 | Target | Google Chrome 157.0.8103.51 (stable, macOS 14.8.3) |
 | Evidence | Official docs (research subagent, sources cited) + automated spike runs (`spikes/day02-feasibility/harness/results*.json`) + owner manual checklist (§4, pending) |
-| Status | Automated part complete; manual part **pending owner** |
+| Status | Automated part complete; manual part **partially run** (6 of 19, §4) |
 
 Confidence legend: **V** = verified by our own run in Chrome 157 · **Vh** = verified only in *headless* Chrome 157 (real-device behaviour may differ; a manual check is listed) · **D** = stated in official docs · **U** = unverified / inferred.
 No result here has been checked on Chrome 120. Version claims below 157 rest on docs (D).
@@ -76,8 +76,25 @@ wake) is feasible. Browser-restart persistence is pending manual check M14.
 extension worker. Use `ServiceWorker.stopAllWorkers` in Day 5+ restart tests.
 
 ## 4. Manual verification (owner)
-Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feasibility/MANUAL_CHECKLIST.md). **Status: not yet run.**
-Items M3–M8 and M11–M14 can't be automated in this environment.
+Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feasibility/MANUAL_CHECKLIST.md). **Status: partially run by the owner (2026-11-16), real Chrome on macOS. 6 of 19 items reported.**
+
+| Item | Result | Effect |
+|---|---|---|
+| M1 tab switching | Pass: one `tab_activated` per switch, real titles | Row 2 → **V** for activation in real Chrome |
+| 30 s alarm (seen during M1) | `tick` every 30 s in the log | Row 6 → **V** in real Chrome 157 |
+| M15 app switch | `WINDOW_ID_NONE` (-1) when Chrome lost OS focus; real window id on return | FR-M8 → **V** on macOS |
+| M9 runtime grant | `permissions.request` from a side-panel button → granted | OQ-1 runtime grant → **V** |
+| M10 overlay | Shown on the page next to the panel; countdown reached 0 | FR-I6 → **V** for display. Escape/buttons in real Chrome not reported yet |
+| M3 / M6 notifications | Created without error (`level: granted`), **but nothing appeared on screen**, for either 2 or 3 buttons | **Confirms SD-9.** `granted` doesn't mean visible. The likely cause is macOS notification settings for Chrome or Focus mode (U). Interventions must never rely on native notifications alone |
+
+**Privacy observation:** the real-browsing log captured a GitHub account-settings
+page title and URL, and an entertainment video title. That is exactly the kind of
+data FR-M6 must exclude or minimise. Account-settings and credentials paths become
+a fixture class for the Day 11 sensitive-site tests. No titles from the owner's run
+are stored in this repository.
+
+Still outstanding: M2, M4, M5, M7, M8, M11–M14, M16–M19, and Escape/buttons for M10.
+M4/M5/M17 can't be judged until notifications are visible (see M16).
 
 ---
 
