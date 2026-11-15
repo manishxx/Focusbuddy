@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+coverage/
+*.zip
+*.crx
+*.pem
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.vite/
+playwright-report/
+test-results/
+# Android (if the companion track is approved)
+.gradle/
+local.properties
+*.keystore
+*.jks
