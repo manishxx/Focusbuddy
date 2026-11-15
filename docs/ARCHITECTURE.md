@@ -274,7 +274,7 @@ Accepted tolerance: threshold onset up to +30 s late (D-011). Alarm names are na
 
 Required: `tabs`, `idle`, `alarms`, `storage`, `sidePanel`, `offscreen`, `notifications`, `scripting`, `contextMenus`.
 Optional (runtime, gesture): `http://*/*` and `https://*/*` host permissions (narrower than `<all_urls>`, which adds `file://`), only for the Strict overlay (SD-2, amended).
-Toolbar action context menu (`contextMenus`): Pause / Resume, Stop session, Mute and pause (FR-S6, FR-I11, AC-29). Extend stays in the panel.
+Toolbar action context menu (`contextMenus`): Open Focus Buddy, Pause / Resume, Add 15 minutes, Mute all and pause ▸, End session… (opens the inline confirm; never ends directly) (FR-S6, FR-I11, AC-29; UX_GUIDELINES v1.0 §2.1, D-018).
 Not requested: `history`, `webNavigation`, `webRequest`, `cookies`, `activeTab`, `unlimitedStorage`, `externally_connectable`.
 
 ---

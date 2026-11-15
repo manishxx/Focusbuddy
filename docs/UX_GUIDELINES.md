@@ -4,7 +4,7 @@
 |---|---|
 | Status | **v1.0, approved Day 04** after an independent cognitive-load and WCAG 2.2 AA review (23 findings, all applied; D-018) |
 | Inputs | PRD v1.0 (J1–J10, FR-I*, FR-P*, BR-*, AC-05/07/08/13/16/24/27/29/30/31/32), ARCHITECTURE v1.0, API_CONTRACTS **v1.1**, DATA_MODEL **v1.1**, FEASIBILITY SD-3/6/9/11 |
-| Message bank | [`docs/ux/messages.json`](ux/messages.json) is the source of truth for **every** user-facing string, and [`docs/ux/banned-phrases.json`](ux/banned-phrases.json) is the lint list (AC-31) |
+| Message bank | [`src/core/messages/messages.json`](../src/core/messages/messages.json) is the source of truth for **every** user-facing string, and [`src/core/messages/banned-phrases.json`](../src/core/messages/banned-phrases.json) (moved from `docs/ux/` on Day 05, ADR-0007) is the lint list (AC-31) |
 | Prototypes | `prototypes/day04/` (static and throwaway). Where a prototype and this document disagree, this document wins |
 
 ---
@@ -230,7 +230,7 @@ Settings sections, each with a one-line explanation:
 8. **Warm, brief recovery.** No over-praise.
 9. **Rotate variants.** The same L1 text never appears twice in a row.
 10. **Truncate user text.** User placeholders are truncated with "…": `{task}` 40, `{objective}` 60, `{nextStep}` 80, `{lastTitle}` 60, `{words}` 60 characters. Private notifications use `.generic`. The lint requires a `.generic` sibling for every notification or tooltip string that uses `{task}`.
-11. **No hard-coded copy.** Every string, including button labels, lives in `messages.json` (169 keys on Day 04) and passes `lint-messages.mjs`. The lint checks banned patterns (also on a letter-spacing-normalised copy), word limits, generic leaks and generic siblings, and runs a self-test of 31 known-bad and 12 known-good strings plus an allow-scope probe. It moves into CI on Day 05 (AC-31).
+11. **No hard-coded copy.** Every string, including button labels, lives in `messages.json` (169 keys on Day 04) and passes `scripts/lint-messages.mjs`. The lint checks banned patterns (also on a letter-spacing-normalised copy), word limits, generic leaks and generic siblings, and runs a self-test of 31 known-bad and 12 known-good strings plus an allow-scope probe. It moves into CI on Day 05 (AC-31).
 12. **No UI jargon.** Not "classification", "segment", "excluded", "LIKELY_IRRELEVANT". Say "private site", "check-in".
 
 ## 6. Visual design tokens

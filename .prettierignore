@@ -1,0 +1,15 @@
+# Generated or vendored
+node_modules/
+dist/
+coverage/
+package-lock.json
+# Excluded from tooling (ADR-0007) or owned elsewhere
+spikes/
+prototypes/
+docs/
+project-management/
+tests/e2e/platform/
+src/core/messages/*.json
+scripts/lint-messages.mjs
+# Prose files keep their hand formatting
+*.md

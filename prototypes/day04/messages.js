@@ -1,4 +1,4 @@
-// GENERATED from docs/ux/messages.json by gen-messages.mjs. Do not edit.
+// GENERATED from src/core/messages/messages.json by gen-messages.mjs. Do not edit.
 window.FB_MESSAGES = {
   "start.title": "Focus session started",
   "start.body": "{task} for {planned}. Tab titles are checked on this computer until you stop.",

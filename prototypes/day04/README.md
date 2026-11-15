@@ -17,7 +17,7 @@ Open `index.html` in Chrome straight from disk (`file://`). Every page links bac
 | `options.html` | F11 settings, permission-denied path, "View what's recorded", Delete all data dialog |
 | `styles.css` | Tokens (light + dark), focus ring, targets, reduced motion |
 | `proto.js` | `FB.t(key, vars)` (placeholder fill, array index or rotation, user text truncated per §5 rule 10), Escape-closes-disclosure handler, icon sprite, state switching, disclosures, chip groups, WebAudio tone |
-| `messages.js` | Generated from `docs/ux/messages.json` by `gen-messages.mjs`. Don't edit it by hand |
+| `messages.js` | Generated from `src/core/messages/messages.json` by `gen-messages.mjs`. Don't edit it by hand |
 | `lint-messages.mjs` | Banned-phrase lint for the bank |
 | `check-console.mjs` | Headless smoke check: console errors, remote requests, 320px overflow, every panel state, overlay `:modal` and focus, panel Escape/End-session focus, delete dialog |
 | `axe-check.mjs` | axe-core run over every page and panel state (owned by the orchestrator) |

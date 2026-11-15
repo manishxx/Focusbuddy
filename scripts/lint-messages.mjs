@@ -1,7 +1,7 @@
-// Day 04 banned-phrase lint for the message bank (AC-31). Moves into CI on Day 05.
-// Usage: node prototypes/day04/lint-messages.mjs [messages.json] [banned.json]
+// Banned-phrase lint for the message bank (AC-31). Runs in CI (ADR-0007).
+// Usage: node scripts/lint-messages.mjs [messages.json] [banned.json]
 import { readFileSync } from "node:fs";
-const [mPath = "docs/ux/messages.json", bPath = "docs/ux/banned-phrases.json"] = process.argv.slice(2);
+const [mPath = "src/core/messages/messages.json", bPath = "src/core/messages/banned-phrases.json"] = process.argv.slice(2);
 const { messages } = JSON.parse(readFileSync(mPath, "utf8"));
 const banned = JSON.parse(readFileSync(bPath, "utf8"));
 const pats = banned.patterns.map(p => ({ ...p, rx: new RegExp(p.re, "i") }));
