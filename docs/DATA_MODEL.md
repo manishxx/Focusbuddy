@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.0, approved Day 03** after two independent reviews (architecture, security). All findings applied |
+| Status | **v1.1 (Day 04, D-018).** v1.0 approved Day 03. v1.1 adds `notificationsSeen`, `shortcutMuteMin`, `session.awaySince` and `pending.tabId/host` for the Day 04 UX contract |
 | Decision | Hybrid storage (ADR-0002): `chrome.storage.local` for small, hot state; **IndexedDB** for append-heavy and history data; `chrome.storage.session` for the UI snapshot and short-lived secrets |
 | Core rule | **Tab titles and URL paths are never persisted** (D-015). Storage holds hosts, classes and timings only |
 
@@ -42,6 +42,8 @@ type Preferences = {
   maxPerSession: number;            // 1–30, default 12
   sound: { enabled: boolean; tone: "chime" | "soft" | "bell"; volume: number /*0–1*/ };
   notificationsEnabled: boolean;    // default true
+  notificationsSeen: null | boolean; // v1.1: onboarding/settings test answer; false → notifications_unavailable notice
+  shortcutMuteMin: 15 | 60 | -1;    // v1.1: Alt+Shift+M duration, default 60
   privateNotifications: boolean;    // default false; true = generic text, no task label (lock screen / screen share)
   overlay: { enabled: boolean; countdownSec: 5 | 6 | 7 | 8 | 9 | 10; showTaskLabel: boolean }; // default false, 5, false
   quietHours: null | { start: "HH:MM"; end: "HH:MM" };   // device local time, may cross midnight
@@ -66,6 +68,7 @@ type ActiveState = {
     breakEndsAt?: number;
     ending?: { endReason: EndReason; endedAt: number };   // set first when ending
     awaitingContinue?: boolean;     // auto-paused for absence; needs user confirmation
+    awaySince?: number;             // v1.1: when the absence that caused the auto-pause began
   };
   lastSeenAt: number;               // updated on every write; used to close segments after a browser close
   attention: "ACTIVE_INPUT" | "IDLE" | "LOCKED" | "BROWSER_UNFOCUSED";
@@ -80,7 +83,8 @@ type ActiveState = {
     repeatsByEpisode: Record<string, number>;
     mutedUntil?: number;
   };
-  pending?: { interventionId: string; episodeId: string; level: 1 | 2 | 3; createdAt: number; attemptedAt?: number };
+  pending?: { interventionId: string; episodeId: string; level: 1 | 2 | 3; createdAt: number; attemptedAt?: number;
+             tabId: number; host?: string };  // v1.1: lets session.addRelevant/relevant.preview derive the host in the SW (absent for private/excluded)
   sessionOverrides: Override[];
   segSeq: number;
 };

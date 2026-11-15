@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Side panel prototype · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#panel-title">Skip to the side panel</a>
+
+<aside class="proto-controls" aria-labelledby="pc-title">
+  <h2 id="pc-title">Prototype controls</h2>
+  <p class="proto-note">Not part of the product. Choose which side-panel state to show. Each state also has a deep link: <code>panel.html#state-id</code>.</p>
+  <label for="state-pick">Panel state</label>
+  <select id="state-pick"></select>
+  <p class="proto-note" id="state-link"></p>
+  <p class="small">Toolbar badge for this state: <span id="mock-badge" class="badge badge-none">none</span></p>
+  <p class="small">Tooltip: <span id="mock-tooltip"></span></p>
+  <p class="small"><a href="index.html">Back to the prototype gallery</a></p>
+</aside>
+
+<main class="panel-layout">
+  <div class="panel-frame">
+    <header class="panel-header">
+      <h1 id="panel-title" tabindex="-1">Focus Buddy</h1>
+      <a class="small" href="options.html">Settings</a>
+    </header>
+
+    <div class="panel-body">
+      <!-- Visible status line: NOT a live region (§4). -->
+      <p id="status-line" class="status-line"></p>
+      <!-- Announcements only for recovering / paused / break / awaiting continue, and only on change. -->
+      <div id="sr-status" role="status" class="visually-hidden"></div>
+      <div id="notice-slot"></div>
+
+      <!-- F2 step 1: empty / create -->
+      <section data-card="create" aria-labelledby="create-h" hidden>
+        <h2 id="create-h">What are you working on?</h2>
+        <div class="field">
+          <label for="intent">Describe your task, how long, and which sites you'll use</label>
+          <textarea id="intent" aria-describedby="intent-example" placeholder="Study Pattern Recognition for 3 hours using claude.ai, classroom.google.com, scholar.google.com and youtube.com"></textarea>
+          <p class="hint" id="intent-example">Example: Study Pattern Recognition for 3 hours using claude.ai, classroom.google.com, scholar.google.com and youtube.com. Goal: finish chapters 1–4.</p>
+        </div>
+        <button type="button" class="btn-primary" data-go="confirm-ok">Set up session</button>
+      </section>
+
+      <!-- F2 step 2: confirm form. Only parser output is pre-filled. -->
+      <section data-card="confirm" aria-labelledby="confirm-h" hidden>
+        <h2 id="confirm-h" data-msg="confirm.title"></h2>
+        <p class="muted small" data-msg="confirm.help"></p>
+        <div class="field">
+          <label for="f-task">Task</label>
+          <input type="text" id="f-task" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-goal">Goal</label>
+          <input type="text" id="f-goal" autocomplete="off">
+        </div>
+        <div class="field" id="len-field">
+          <label for="f-len">Length (minutes)</label>
+          <input type="number" id="f-len" min="1" max="480" inputmode="numeric" aria-describedby="len-hint">
+          <p class="hint" id="len-hint">Up to 480 minutes.</p>
+          <p class="field-warning" id="len-warn" hidden><i data-icon="warning"></i><span id="len-warn-text"></span></p>
+          <fieldset style="margin-top:0.5rem">
+            <legend>Quick lengths</legend>
+            <div class="chip-radios" id="len-chips"></div>
+          </fieldset>
+        </div>
+        <fieldset>
+          <legend>Sites</legend>
+          <ul class="chips" id="site-chips"></ul>
+          <div class="inline-add">
+            <div class="field"><label for="add-site">Add a site</label><input type="text" id="add-site" autocomplete="off"></div>
+            <button type="button" data-add="site-chips" data-from="add-site">Add</button>
+          </div>
+        </fieldset>
+        <details id="more-details">
+          <summary data-msg="label.moreDetails"></summary>
+          <fieldset>
+            <legend>Keywords</legend>
+            <ul class="chips" id="kw-chips"></ul>
+            <div class="inline-add">
+              <div class="field"><label for="add-kw">Add a keyword</label><input type="text" id="add-kw" autocomplete="off"></div>
+              <button type="button" data-add="kw-chips" data-from="add-kw">Add</button>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Check-in style</legend>
+            <div class="radio-cards">
+              <label class="radio-card"><input type="radio" name="f-mode" value="gentle" checked><span><strong>Gentle</strong><span>A quiet notice. No sounds, no pop-ups.</span></span></label>
+              <label class="radio-card"><input type="radio" name="f-mode" value="adaptive"><span><strong>Adaptive</strong><span>Starts gentle. Gets a little firmer if a check-in is missed.</span></span></label>
+              <label class="radio-card"><input type="radio" name="f-mode" value="strict"><span><strong>Strict</strong><span>Sound and an optional full-page reminder.</span></span></label>
+            </div>
+          </fieldset>
+          <div class="field">
+            <label for="f-next">Next step (optional)</label>
+            <input type="text" id="f-next" aria-describedby="next-hint" autocomplete="off">
+            <p class="hint" id="next-hint">What's the very first thing you'll do?</p>
+          </div>
+        </details>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task">Start session</button>
+          <button type="button" data-go="create">Back</button>
+        </div>
+      </section>
+
+      <!-- F2 step 3: already active -->
+      <section data-card="conflict" class="card card-neutral" aria-labelledby="conflict-msg" hidden>
+        <p id="conflict-msg" data-msg="session.alreadyActive"></p>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="session.keepCurrent" data-autofocus></button>
+          <button type="button" data-go="on_task" data-msg="session.replace"></button>
+        </div>
+      </section>
+
+      <!-- F4 L1 nudge -->
+      <section data-card="drift-l1" class="card card-check" role="alert" aria-labelledby="l1-msg" hidden>
+        <p id="l1-msg" data-msg="nudge.l1" data-index="0"></p>
+        <div data-actions="l1"></div>
+      </section>
+
+      <!-- F4 Gentle single repeat (BR-4) -->
+      <section data-card="drift-repeat" class="card card-check" role="alert" aria-labelledby="rep-msg" hidden>
+        <p id="rep-msg" data-msg="nudge.repeat"></p>
+        <div data-actions="rep"></div>
+      </section>
+
+      <!-- F4 This is relevant: mixed-use host, words step -->
+      <section data-card="relevant-words" class="card card-soft" aria-labelledby="rw-h" hidden>
+        <h2 id="rw-h" data-msg="relevant.title"></h2>
+        <p data-msg="relevant.words" data-vars='{"host":"youtube.com"}'></p>
+        <div class="field">
+          <label for="rw-words" data-msg="relevant.wordsLabel"></label>
+          <input type="text" id="rw-words" autocomplete="off" aria-describedby="rw-help">
+          <p class="hint" id="rw-help" data-msg="relevant.wordsHelp"></p>
+        </div>
+        <div class="check-row"><input type="checkbox" id="rw-remember"><label for="rw-remember" data-msg="relevant.remember"></label></div>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="rw-save" data-msg="relevant.save"></button>
+          <button type="button" data-go="drifted">Back</button>
+        </div>
+      </section>
+
+      <!-- F4 This is relevant: non-mixed host -->
+      <section data-card="relevant-host" class="card card-soft" aria-labelledby="rh-h" hidden>
+        <h2 id="rh-h" data-msg="relevant.title"></h2>
+        <p data-msg="relevant.host" data-vars='{"host":"en.wikipedia.org"}'></p>
+        <div class="check-row"><input type="checkbox" id="rh-remember"><label for="rh-remember" data-msg="relevant.remember"></label></div>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="relevant-confirm-host" data-msg="relevant.save"></button>
+          <button type="button" data-go="drifted">Back</button>
+        </div>
+      </section>
+
+      <!-- F4 This is relevant: private site, nothing to allow -->
+      <section data-card="relevant-na" class="card card-neutral" aria-labelledby="rna-h" hidden>
+        <h2 id="rna-h" data-msg="relevant.title"></h2>
+        <p data-msg="relevant.notAvailable"></p>
+        <div class="actions"><button type="button" data-go="on_task" data-msg="label.done"></button></div>
+      </section>
+
+      <!-- F4 This is relevant: confirmation -->
+      <section data-card="relevant" class="card card-soft" aria-labelledby="rel-msg" hidden>
+        <p id="rel-msg"></p>
+        <div class="actions"><button type="button" class="btn-primary" data-go="on_task" data-msg="label.done"></button></div>
+      </section>
+
+      <!-- F6 recovery: stays until the next status change or Done -->
+      <section data-card="recovery" class="card card-soft" aria-labelledby="rec-msg" hidden>
+        <p id="rec-msg"></p>
+        <div class="actions">
+          <button type="button" class="btn-link" data-proto="Prototype: this would switch to your last relevant tab." data-msg="recovery.returnToTab"></button>
+          <button type="button" data-go="on_task" data-msg="label.done"></button>
+        </div>
+      </section>
+
+      <!-- F7 break chooser: action buttons, start at once -->
+      <section data-card="break-chooser" class="card" aria-labelledby="brk-h" hidden>
+        <h2 id="brk-h" data-msg="action.break"></h2>
+        <p id="brk-short" class="field-warning" hidden><i data-icon="info"></i><span data-msg="break.shortened" data-vars='{"time":"4:05 pm"}'></span></p>
+        <div role="group" aria-labelledby="brk-len">
+          <p class="label" id="brk-len" data-msg="label.breakLength"></p>
+          <ul class="chips">
+            <li><button type="button" data-break="5" data-msg="label.minutes" data-vars='{"minutes":5}'></button></li>
+            <li><button type="button" data-break="10" data-msg="label.minutes" data-vars='{"minutes":10}'></button></li>
+            <li><button type="button" data-break="15" data-msg="label.minutes" data-vars='{"minutes":15}'></button></li>
+          </ul>
+          <div class="inline-add">
+            <div class="field"><label for="brk-other" data-msg="label.otherMinutes"></label><input type="number" id="brk-other" min="1" max="60" inputmode="numeric"></div>
+            <button type="button" id="brk-other-go" data-msg="label.startBreak"></button>
+          </div>
+        </div>
+        <div class="actions"><button type="button" data-go="on_task">Cancel</button></div>
+      </section>
+
+      <!-- F7 on break -->
+      <section data-card="on-break" class="card card-neutral" aria-labelledby="onbrk-msg" hidden>
+        <p id="onbrk-msg"></p>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="label.endBreak"></button>
+          <button type="button" id="brk-plus5" data-msg="label.plus5"></button>
+        </div>
+      </section>
+
+      <!-- F7 break over -->
+      <section data-card="break-over" class="card card-soft" aria-labelledby="bo-h" hidden>
+        <h2 id="bo-h" data-msg="break.over.title"></h2>
+        <p data-msg="break.over.body"></p>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="action.back"></button>
+          <button type="button" data-go="break-extended" data-msg="break.moreMinutes"></button>
+        </div>
+      </section>
+
+      <!-- F8 awaiting continue -->
+      <section data-card="awaiting" class="card card-soft" aria-labelledby="aw-h" hidden>
+        <h2 id="aw-h" data-msg="continue.title"></h2>
+        <p data-msg="continue.panel"></p>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="continue.confirm"></button>
+          <button type="button" data-go="extend">Change length</button>
+          <button type="button" data-go="end-confirm" data-msg="label.endSessionMenu"></button>
+        </div>
+      </section>
+
+      <!-- F9 mute chooser -->
+      <section data-card="mute" class="card" aria-labelledby="mute-h" hidden>
+        <h2 id="mute-h" data-msg="action.mute"></h2>
+        <fieldset>
+          <legend data-msg="label.muteFor"></legend>
+          <div class="check-row"><input type="radio" name="mute-len" id="mute-15" value="15"><label for="mute-15" data-msg="label.minutes" data-vars='{"minutes":15}'></label></div>
+          <div class="check-row"><input type="radio" name="mute-len" id="mute-60" value="60" checked><label for="mute-60" data-msg="label.minutes" data-vars='{"minutes":60}'></label></div>
+          <div class="check-row"><input type="radio" name="mute-len" id="mute-rest" value="rest"><label for="mute-rest">Rest of session</label></div>
+        </fieldset>
+        <div class="check-row"><input type="checkbox" id="mute-pause"><label for="mute-pause" data-msg="label.alsoPause"></label></div>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="mute-go" data-msg="action.mute"></button>
+          <button type="button" data-go="on_task">Cancel</button>
+        </div>
+      </section>
+
+      <!-- F9 result messages (muted, unmuted, extended) -->
+      <section data-card="result" class="card card-neutral" aria-labelledby="result-msg" hidden>
+        <p id="result-msg" role="status"></p>
+      </section>
+
+      <!-- F9 add time -->
+      <section data-card="extend" class="card" aria-labelledby="ext-h" hidden>
+        <h2 id="ext-h">Add time</h2>
+        <ul class="chips">
+          <li><button type="button" data-extend="15" data-msg="label.addTime" data-vars='{"minutes":15}'></button></li>
+          <li><button type="button" data-extend="30" data-msg="label.addTime" data-vars='{"minutes":30}'></button></li>
+          <li><button type="button" data-extend="60" data-msg="label.addTime" data-vars='{"minutes":60}'></button></li>
+        </ul>
+        <div class="actions"><button type="button" data-go="on_task">Cancel</button></div>
+      </section>
+
+      <!-- F9 end session inline confirm: Keep going is focused -->
+      <section data-card="end-confirm" class="card" aria-labelledby="end-h" hidden>
+        <h2 id="end-h" data-msg="stop.confirm"></h2>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="stop.keepGoing" data-autofocus id="keep-going"></button>
+          <button type="button" data-go="summary" data-msg="action.stop"></button>
+        </div>
+      </section>
+
+      <!-- F10 summary -->
+      <section data-card="summary" aria-labelledby="sum-h" hidden>
+        <h2 id="sum-h" data-msg="summary.title"></h2>
+        <p class="session-task" style="font-size:1.125rem">Study Pattern Recognition</p>
+        <p data-msg="summary.time"></p>
+        <p data-msg="summary.recoveries.many"></p>
+        <p data-msg="summary.away"></p>
+        <div class="check-row"><input type="checkbox" id="sum-done"><label for="sum-done" data-msg="summary.objective"></label></div>
+        <details>
+          <summary>Details</summary>
+          <ul>
+            <li>scholar.google.com: 41 min</li>
+            <li>claude.ai: 48 min</li>
+            <li>classroom.google.com: 22 min</li>
+            <li>youtube.com: 19 min</li>
+            <li>Other sites: 25 min</li>
+          </ul>
+        </details>
+        <div class="actions">
+          <button type="button" class="btn-primary" data-go="create" data-msg="summary.another"></button>
+          <button type="button" data-go="create" data-msg="label.done"></button>
+        </div>
+      </section>
+
+      <!-- F3 active session block -->
+      <section id="session" aria-labelledby="session-task" hidden>
+        <h2 id="session-task" class="session-task">Study Pattern Recognition</h2>
+        <div class="row-edit" id="goal-view">
+          <dl class="dl-tight"><dt>Goal</dt><dd id="goal-text">Finish chapters 1–4</dd></dl>
+          <button type="button" class="btn-icon" data-edit="goal" aria-label="Edit goal" title="Edit goal"><i data-icon="pencil"></i></button>
+        </div>
+        <div class="field" id="goal-edit" hidden>
+          <label for="goal-input">Goal</label>
+          <input type="text" id="goal-input" autocomplete="off">
+          <div class="actions"><button type="button" data-save="goal">Save</button><button type="button" data-cancel="goal">Cancel</button></div>
+        </div>
+        <div>
+          <p class="time-left" id="time-left"></p>
+          <div class="progress" aria-hidden="true"><span id="progress-fill" style="width:26%"></span></div>
+        </div>
+        <div class="row-edit" id="next-view" style="margin-top:0.75rem">
+          <dl class="dl-tight"><dt>Next step</dt><dd id="next-text">Re-read the k-NN section in chapter 2</dd></dl>
+          <button type="button" class="btn-icon" data-edit="next" aria-label="Edit next step" title="Edit next step"><i data-icon="pencil"></i></button>
+        </div>
+        <div class="field" id="next-edit" hidden>
+          <label for="next-input">Next step</label>
+          <input type="text" id="next-input" autocomplete="off">
+          <div class="actions"><button type="button" data-save="next">Save</button><button type="button" data-cancel="next">Cancel</button></div>
+        </div>
+        <p class="muted-line" id="muted-line" hidden>
+          <span id="muted-text"></span>
+          <button type="button" id="unmute" data-msg="mute.unmute"></button>
+        </p>
+        <div id="controls-full">
+          <div class="actions">
+            <button type="button" data-go="break-chooser" data-msg="action.break"></button>
+            <button type="button" data-go="paused" data-msg="label.pause"></button>
+            <button type="button" aria-expanded="false" aria-controls="more-menu"><span data-msg="label.more"></span><i data-icon="chevron" class="chev"></i></button>
+          </div>
+          <div class="disclosure-panel" id="more-menu" hidden>
+            <ul>
+              <li><button type="button" data-extend="15" data-msg="label.addTime" data-vars='{"minutes":15}'></button></li>
+              <li><button type="button" data-go="mute" data-msg="action.mute"></button></li>
+              <li><a class="button" href="options.html#recorded" data-msg="label.viewRecorded"></a></li>
+              <li><button type="button" data-go="end-confirm" data-msg="label.endSessionMenu"></button></li>
+            </ul>
+          </div>
+        </div>
+        <div id="controls-paused" class="actions" hidden>
+          <button type="button" class="btn-primary" data-go="on_task" data-msg="label.resume"></button>
+          <button type="button" data-go="end-confirm" data-msg="label.endSessionMenu"></button>
+        </div>
+        <p class="context-label" id="now-label" style="margin-top:0.75rem"></p>
+      </section>
+
+      <p id="proto-msg" class="proto-note" role="status"></p>
+    </div>
+
+    <footer class="footer-help"><a href="index.html#how" data-msg="label.help"></a></footer>
+  </div>
+</main>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  const t = FB.t;
+  const $ = function (id) { return document.getElementById(id); };
+  const MUTE_UNTIL = "4:40 pm";
+
+  // Toolbar badge + tooltip per UX_GUIDELINES §2.1.
+  const BADGE = {
+    none:     { text: "", cls: "badge-none", tip: function () { return t("tooltip.none"); } },
+    on:       { text: "ON", cls: "badge-on", tip: function (o) { return t("tooltip.active", { timeLeft: o.timeLeft || "2 h 14 min" }); } },
+    check:    { text: "?", cls: "badge-check", tip: function () { return t("tooltip.checkin"); } },
+    paused:   { text: "II", cls: "badge-neutral", tip: function () { return t("tooltip.paused"); } },
+    awaiting: { text: "II", cls: "badge-neutral", tip: function () { return t("tooltip.awaitingContinue"); } },
+    brk:      { text: "BRK", cls: "badge-neutral", tip: function (o) { return t("tooltip.break", { time: o.breakEnd }); } },
+  };
+
+  // Status line per §4: icon shape + words. `say` = announced through #sr-status.
+  const STATUS = {
+    on_task: ["circle-filled", "status.on_task", false],
+    unsure: ["circle-open", "status.unsure", false],
+    drifted: ["bubble", "status.drifted", false],        // announced by the role=alert card instead
+    recovering: ["arrow-back", "status.recovering", true],
+    excluded: ["shield", "status.excluded", false],
+    idle: ["moon", "status.idle", false],
+    locked: ["lock", "status.locked", false],
+    unfocused: ["window", "status.unfocused", false],
+    paused: ["pause", "status.paused", true],
+    "break": ["cup", "status.break", true],
+  };
+
+  // session: "full" (controls), "paused" (Resume), "info" (no controls), undefined = hidden.
+  // ctx: [key, vars] for the context line (only shown with session "full").
+  const NOW = ["context.now", { host: "scholar.google.com" }];
+  const STATES = [
+    ["Create a session (F2)", [
+      ["create", { label: "Empty / create", card: "create", badge: "none" }],
+      ["confirm-ok", { label: "Confirm form, no warnings", card: "confirm", badge: "none", len: 180 }],
+      ["confirm", { label: "Confirm form, length warning (defaulted)", card: "confirm", badge: "none", warn: "parse.durationDefaulted", len: 60 }],
+      ["confirm-clamped", { label: "Confirm form, length warning (clamped)", card: "confirm", badge: "none", warn: "parse.durationClamped", len: 480 }],
+      ["confirm-until", { label: "Confirm form, length warning (time passed)", card: "confirm", badge: "none", warn: "parse.untilPassed", len: "" }],
+      ["conflict", { label: "A session is already running", card: "conflict", badge: "on" }],
+    ]],
+    ["Active session (F3)", [
+      ["on_task", { label: "Active: on task", status: "on_task", session: "full", ctx: NOW, badge: "on" }],
+      ["unsure", { label: "Active: not sure", status: "unsure", session: "full", ctx: ["context.now", { host: "youtube.com" }], badge: "on" }],
+      ["private-site", { label: "Active: private site", status: "excluded", session: "full", ctx: ["context.private"], badge: "on" }],
+      ["private-window", { label: "Active: private window", status: "excluded", session: "full", ctx: ["context.privateWindow"], badge: "on" }],
+      ["idle", { label: "Active: idle", status: "idle", session: "full", ctx: NOW, badge: "on" }],
+      ["locked", { label: "Active: screen locked", status: "locked", session: "full", badge: "on" }],
+      ["unfocused", { label: "Active: Chrome not in front", status: "unfocused", session: "full", ctx: ["context.browserPage"], badge: "on" }],
+    ]],
+    ["Check-in and recovery (F4, F6)", [
+      ["drifted", { label: "Check-in card (L1)", card: "drift-l1", status: "drifted", session: "info", badge: "check" }],
+      ["repeat", { label: "Check-in card (Gentle repeat)", card: "drift-repeat", status: "drifted", session: "info", badge: "check" }],
+      ["relevant-words", { label: "This is relevant: words step (youtube.com)", card: "relevant-words", status: "drifted", session: "info", badge: "check" }],
+      ["relevant-host", { label: "This is relevant: whole site", card: "relevant-host", status: "drifted", session: "info", badge: "check" }],
+      ["relevant-not-available", { label: "This is relevant: private site", card: "relevant-na", status: "drifted", session: "info", badge: "check" }],
+      ["relevant", { label: "This is relevant: done (words)", card: "relevant", status: "on_task", session: "full", ctx: ["context.now", { host: "youtube.com" }], badge: "on", rel: "words" }],
+      ["relevant-confirm-host", { label: "This is relevant: done (whole site)", card: "relevant", status: "on_task", session: "full", ctx: ["context.now", { host: "en.wikipedia.org" }], badge: "on", rel: "host" }],
+      ["recovery", { label: "Recovery: next step", card: "recovery", status: "recovering", session: "full", ctx: NOW, badge: "on", rec: "recovery.nextStep" }],
+      ["recovery-title", { label: "Recovery: last tab title", card: "recovery", status: "recovering", session: "full", ctx: NOW, badge: "on", rec: "recovery.lastTitle" }],
+      ["recovery-objective", { label: "Recovery: goal", card: "recovery", status: "recovering", session: "full", ctx: NOW, badge: "on", rec: "recovery.objective" }],
+    ]],
+    ["Break (F7)", [
+      ["break-chooser", { label: "Break chooser", card: "break-chooser", status: "on_task", session: "info", badge: "on" }],
+      ["break-chooser-short", { label: "Break chooser near session end", card: "break-chooser", status: "on_task", session: "info", badge: "on", short: true }],
+      ["on-break", { label: "On a break", card: "on-break", status: "break", session: "info", badge: "brk" }],
+      ["break-extended", { label: "On a break, extended", card: "on-break", status: "break", session: "info", badge: "brk", brkExt: true }],
+      ["break-over", { label: "Break over", card: "break-over", status: "break", session: "info", badge: "brk" }],
+    ]],
+    ["Pause, continue, mute, add time, end (F8, F9)", [
+      ["paused", { label: "Paused", status: "paused", session: "paused", badge: "paused" }],
+      ["awaiting", { label: "Continue your session? (F8)", card: "awaiting", status: "paused", session: "info", badge: "awaiting" }],
+      ["mute", { label: "Mute chooser", card: "mute", status: "on_task", session: "info", badge: "on" }],
+      ["muted", { label: "Muted: confirmation", card: "result", result: "mute.on", status: "on_task", session: "full", ctx: NOW, badge: "on", muted: true }],
+      ["muted-active", { label: "Muted: active view with Unmute", status: "on_task", session: "full", ctx: NOW, badge: "on", muted: true }],
+      ["muted-paused", { label: "Muted and paused", card: "result", result: "mute.onPaused", status: "paused", session: "paused", badge: "paused" }],
+      ["unmuted", { label: "Unmuted", card: "result", result: "mute.off", status: "on_task", session: "full", ctx: NOW, badge: "on" }],
+      ["extend", { label: "Add time chooser", card: "extend", status: "on_task", session: "info", badge: "on" }],
+      ["extend-done", { label: "Time added", card: "result", result: "extend.done", status: "on_task", session: "full", ctx: NOW, badge: "on", ext: true }],
+      ["extend-capped", { label: "Add time hit the 8-hour limit", card: "result", result: "extend.capped", status: "on_task", session: "full", ctx: NOW, badge: "on" }],
+      ["end-confirm", { label: "End session: inline confirm", card: "end-confirm", status: "on_task", session: "info", badge: "on" }],
+    ]],
+    ["Summary (F10)", [
+      ["summary", { label: "Session summary", card: "summary", badge: "none" }],
+    ]],
+    ["Notices", [
+      ["notice-notifications_unavailable", { label: "Notice: notifications not showing", status: "on_task", session: "full", ctx: NOW, badge: "on", notice: "notice.notifications_unavailable" }],
+      ["notice-overlay_permission_missing", { label: "Notice: overlay permission missing", status: "on_task", session: "full", ctx: NOW, badge: "on", notice: "notice.overlay_permission_missing" }],
+      ["notice-overlay_unavailable_page", { label: "Notice: overlay can't show on this page", status: "on_task", session: "full", ctx: ["context.browserPage"], badge: "on", notice: "notice.overlay_unavailable_page" }],
+      ["notice-storage_error", { label: "Notice: storage error", status: "on_task", session: "full", ctx: NOW, badge: "on", notice: "notice.storage_error", warn: true }],
+      ["notice-prefs_reset", { label: "Notice: settings reset", status: "on_task", session: "full", ctx: NOW, badge: "on", notice: "notice.prefs_reset" }],
+      ["notice-safe_mode", { label: "Notice: safe mode", status: "on_task", session: "full", ctx: NOW, badge: "on", notice: "notice.safe_mode", warn: true }],
+    ]],
+  ];
+  const MAP = {};
+  STATES.forEach(function (g) { g[1].forEach(function (s) { MAP[s[0]] = s[1]; }); });
+
+  const pick = $("state-pick");
+  STATES.forEach(function (g) {
+    const og = document.createElement("optgroup");
+    og.label = g[0];
+    g[1].forEach(function (s) {
+      const o = document.createElement("option");
+      o.value = s[0]; o.textContent = s[1].label + " (#" + s[0] + ")";
+      og.appendChild(o);
+    });
+    pick.appendChild(og);
+  });
+
+  // Length chips: real radios named "30 minutes" etc.
+  [30, 60, 90, 120].forEach(function (m) {
+    const id = "len-" + m;
+    const lab = document.createElement("label");
+    lab.setAttribute("for", id);
+    lab.innerHTML = '<input type="radio" name="len-chip" id="' + id + '" value="' + m + '"><span></span>';
+    lab.querySelector("span").textContent = t("label.minutes", { minutes: m });
+    $("len-chips").appendChild(lab);
+  });
+
+  let breakEnd = "3:40 pm";
+  let current = null;
+  let lastSaid = "";
+
+  function setState(id, opts) {
+    opts = opts || {};
+    const s = MAP[id];
+    if (!s) { console.warn("Unknown state", id); return; }
+    current = id;
+    pick.value = id;
+    $("state-link").textContent = "Deep link: panel.html#" + id;
+    if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
+
+    // close any open disclosure
+    document.querySelectorAll("button[aria-expanded][aria-controls]").forEach(function (b) {
+      b.setAttribute("aria-expanded", "false");
+      const p = $(b.getAttribute("aria-controls")); if (p) p.hidden = true;
+    });
+
+    // cards
+    let shown = null;
+    document.querySelectorAll("[data-card]").forEach(function (el) {
+      const on = el.dataset.card === s.card;
+      el.hidden = !on;
+      if (on) shown = el;
+    });
+
+    // visible status line (not live) + announcement region (only on change)
+    const sl = $("status-line");
+    let say = "";
+    if (s.status) {
+      const st = STATUS[s.status];
+      sl.innerHTML = FB.icon(st[0], st[0] === "circle-filled" ? "filled" : "") + "<span></span>";
+      sl.lastChild.textContent = t(st[1]);
+      if (st[2]) say = t(st[1]);
+    } else sl.textContent = "";
+    if (say !== lastSaid) { $("sr-status").textContent = say; lastSaid = say; }
+
+    // notices
+    const ns = $("notice-slot");
+    ns.innerHTML = "";
+    if (s.notice) {
+      const d = document.createElement("div");
+      d.className = "notice" + (s.warn ? " notice-check" : "");
+      d.innerHTML = FB.icon(s.warn ? "warning" : "info") + "<p style=\"margin:0\"></p>";
+      d.querySelector("p").textContent = t(s.notice);
+      ns.appendChild(d);
+    }
+
+    // session block. While a check-in card shows, controls and context are hidden (U1, U3).
+    const sess = $("session");
+    sess.hidden = !s.session;
+    $("controls-full").hidden = s.session !== "full";
+    $("controls-paused").hidden = s.session !== "paused";
+    const timeLeft = s.ext ? (opts.timeLeft || "2 h 29 min") : "2 h 14 min";
+    $("time-left").textContent = t("label.timeLeft", { timeLeft: timeLeft }) + (s.session === "paused" ? " (paused)" : "");
+    const showCtx = s.session === "full" && s.ctx;
+    $("now-label").hidden = !showCtx;
+    $("now-label").textContent = showCtx ? t(s.ctx[0], s.ctx[1]) : "";
+    $("muted-line").hidden = !s.muted;
+    $("muted-text").textContent = t("mute.status", { time: MUTE_UNTIL });
+
+    // state-specific content
+    if (s.card === "confirm") prepConfirm(s);
+    if (s.card === "recovery") $("rec-msg").textContent = t(s.rec);
+    if (s.card === "break-chooser") $("brk-short").hidden = !s.short;
+    if (s.card === "on-break") {
+      if (s.brkExt && breakEnd === "3:40 pm") breakEnd = "3:45 pm";
+      $("onbrk-msg").textContent = s.brkExt ? t("break.extended", { time: breakEnd }) : t("break.started", { time: breakEnd });
+    }
+    if (s.card === "relevant-words") $("rw-words").value = opts.words || FB.SCENARIO.words;
+    if (s.card === "relevant") {
+      $("rel-msg").textContent = s.rel === "host"
+        ? t("relevant.confirmHost", { host: "en.wikipedia.org" })
+        : t("relevant.confirm", { host: "youtube.com", words: opts.words || FB.SCENARIO.words });
+    }
+    if (s.card === "result") {
+      $("result-msg").textContent = s.result === "extend.done"
+        ? t("extend.done", { minutes: opts.minutes || 15, timeLeft: timeLeft })
+        : t(s.result, { time: s.result === "extend.capped" ? "9:00 pm" : MUTE_UNTIL });
+    }
+
+    // badge mock
+    const b = BADGE[s.badge];
+    const badge = $("mock-badge");
+    badge.className = "badge " + b.cls;
+    badge.textContent = b.text || "none";
+    $("mock-tooltip").textContent = b.tip({ timeLeft: timeLeft, breakEnd: breakEnd }) + (s.muted ? t("tooltip.mutedSuffix", { time: MUTE_UNTIL }) : "");
+    $("proto-msg").textContent = "";
+
+    // Focus: inline confirms always focus their safe button (unless the prototype picker changed the
+    // state); other cards move focus to their heading only when the user's own action caused it.
+    const auto = shown && shown.querySelector("[data-autofocus]");
+    if (auto && !opts.fromPicker) auto.focus();
+    else if (opts.focus) FB.focusEl(shown ? (shown.querySelector("h2") || shown) : $("session-task"));
+  }
+
+  // ---------- confirm form ----------
+  let confirmFilled = false;
+  function chip(text, listId) {
+    const li = document.createElement("li");
+    li.className = "chip";
+    li.innerHTML = "<span></span><button type=\"button\" data-remove>" + FB.icon("close") + "</button>";
+    li.firstChild.textContent = text;
+    li.lastChild.setAttribute("aria-label", "Remove " + text);
+    li.lastChild.title = "Remove " + text;
+    $(listId).appendChild(li);
+  }
+  function prepConfirm(s) {
+    if (!confirmFilled) {
+      // Parser output only (§8): task, goal, length, sites, one keyword. Next step stays empty.
+      $("f-task").value = FB.SCENARIO.task;
+      $("f-goal").value = FB.SCENARIO.objective;
+      FB.SITES.forEach(function (x) { chip(x, "site-chips"); });
+      chip("pattern recognition", "kw-chips");
+      confirmFilled = true;
+    }
+    $("f-len").value = s.len;
+    syncLenChips();
+    const w = $("len-warn"), f = $("len-field");
+    if (s.warn) {
+      $("len-warn-text").textContent = t(s.warn);
+      w.hidden = false; f.classList.add("has-warning");
+      $("f-len").setAttribute("aria-describedby", "len-warn len-hint");
+    } else clearLenWarn();
+  }
+  function clearLenWarn() {
+    $("len-warn").hidden = true; $("len-field").classList.remove("has-warning");
+    $("f-len").setAttribute("aria-describedby", "len-hint");
+  }
+  function syncLenChips() {
+    document.querySelectorAll('input[name="len-chip"]').forEach(function (r) { r.checked = r.value === String($("f-len").value); });
+  }
+  $("len-chips").addEventListener("change", function (e) {
+    if (e.target.name === "len-chip") { $("f-len").value = e.target.value; clearLenWarn(); }
+  });
+  $("f-len").addEventListener("input", syncLenChips);
+
+  document.addEventListener("click", function (e) {
+    const rm = e.target.closest("[data-remove]");
+    if (rm) {
+      const li = rm.closest("li"), list = li.parentElement;
+      const next = li.nextElementSibling || li.previousElementSibling;
+      li.remove();
+      const focusTarget = next ? next.querySelector("button") : list.parentElement.querySelector("input");
+      if (focusTarget) focusTarget.focus();
+      return;
+    }
+    const add = e.target.closest("[data-add]");
+    if (add) {
+      const inp = $(add.dataset.from);
+      const v = inp.value.trim();
+      if (v) { chip(v, add.dataset.add); inp.value = ""; }
+      inp.focus();
+      return;
+    }
+    const go = e.target.closest("[data-go]");
+    if (go) { setState(go.dataset.go, { focus: true }); return; }
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const m = { back: "recovery", relevant: "relevant-words", "break": "break-chooser", mute: "mute", stop: "end-confirm" };
+      setState(m[act.dataset.act], { focus: true });
+      return;
+    }
+    const brk = e.target.closest("[data-break]");
+    if (brk) { startBreak(brk.dataset.break); return; }
+    const ext = e.target.closest("[data-extend]");
+    if (ext) {
+      const v = ext.dataset.extend;
+      const left = { "15": "2 h 29 min", "30": "2 h 44 min", "60": "3 h 14 min" }[v];
+      setState("extend-done", { focus: true, minutes: v, timeLeft: left });
+      return;
+    }
+    const proto = e.target.closest("[data-proto]");
+    if (proto) { $("proto-msg").textContent = proto.dataset.proto; return; }
+    const ed = e.target.closest("[data-edit]");
+    if (ed) {
+      const k = ed.dataset.edit;
+      $(k + "-input").value = $(k + "-text").textContent;
+      $(k + "-view").hidden = true; $(k + "-edit").hidden = false;
+      $(k + "-input").focus();
+      return;
+    }
+    const sv = e.target.closest("[data-save],[data-cancel]");
+    if (sv) {
+      const k = sv.dataset.save || sv.dataset.cancel;
+      if (sv.dataset.save && $(k + "-input").value.trim()) $(k + "-text").textContent = $(k + "-input").value.trim();
+      $(k + "-edit").hidden = true; $(k + "-view").hidden = false;
+      $(k + "-view").querySelector("button").focus();
+    }
+  });
+
+  // break
+  function startBreak(min) {
+    const m = 25 + Number(min);
+    breakEnd = "3:" + String(Math.min(m, 59)).padStart(2, "0") + " pm";
+    setState("on-break", { focus: true });
+  }
+  $("brk-other-go").addEventListener("click", function () {
+    const v = Number($("brk-other").value);
+    if (v >= 1 && v <= 60) startBreak(v); else $("brk-other").focus();
+  });
+  $("brk-plus5").addEventListener("click", function () {
+    const mm = Math.min(Number(breakEnd.split(":")[1].slice(0, 2)) + 5, 59);
+    breakEnd = "3:" + String(mm).padStart(2, "0") + " pm";
+    $("onbrk-msg").textContent = t("break.extended", { time: breakEnd });
+    $("mock-tooltip").textContent = t("tooltip.break", { time: breakEnd });
+  });
+
+  // relevant (words)
+  $("rw-save").addEventListener("click", function () {
+    setState("relevant", { focus: true, words: $("rw-words").value.trim() || FB.SCENARIO.words });
+  });
+
+  // mute
+  $("mute-go").addEventListener("click", function () {
+    setState($("mute-pause").checked ? "muted-paused" : "muted", { focus: true });
+  });
+  $("unmute").addEventListener("click", function () { setState("unmuted", { focus: true }); });
+
+  pick.addEventListener("change", function () { setState(pick.value, { fromPicker: true }); });
+  window.addEventListener("hashchange", function () {
+    const id = location.hash.slice(1);
+    if (MAP[id] && id !== current) setState(id);
+  });
+
+  FB.init();
+  const start = location.hash.slice(1);
+  setState(MAP[start] ? start : "create");
+})();
+</script>
+</body>
+</html>

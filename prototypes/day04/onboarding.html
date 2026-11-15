@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- F1 first run (J1). In the product this is options.html#welcome. -->
+<header class="page">
+  <p class="small"><a href="index.html">Prototype gallery</a></p>
+</header>
+<main class="page" style="max-width:36rem">
+  <h1>Welcome to Focus Buddy</h1>
+
+  <section data-state="1" aria-labelledby="s1-h">
+    <p class="step-indicator">Step 1 of 3</p>
+    <h2 id="s1-h">A focus companion for your browser</h2>
+    <ul>
+      <li>Helps you start, notice drift and come back.</li>
+      <li>Everything stays on this computer.</li>
+      <li>Not a medical device.</li>
+    </ul>
+    <div class="actions"><button type="button" class="btn-primary" data-step="2">Next</button></div>
+  </section>
+
+  <section data-state="2" aria-labelledby="s2-h" hidden>
+    <p class="step-indicator">Step 2 of 3</p>
+    <h2 id="s2-h">What Focus Buddy can see</h2>
+    <p>Chrome showed these warnings when you added Focus Buddy.</p>
+    <div class="card stack">
+      <blockquote>“Read your browsing history”</blockquote>
+      <p>Focus Buddy reads the title and site of your current tab, only while a session is running. Titles are checked, then forgotten.</p>
+    </div>
+    <div class="card stack" style="margin-top:0.75rem">
+      <blockquote>“Display notifications”</blockquote>
+      <p>Used for gentle check-ins.</p>
+      <button type="button" id="test-notif"><i data-icon="bell"></i>Send a test notification</button>
+      <p id="test-sent" role="status" class="proto-note"></p>
+      <div id="seen-q" role="group" aria-labelledby="seen-label" hidden>
+        <p id="seen-label" class="label" data-msg="onboarding.seen.question"></p>
+        <div class="actions" style="margin-top:0">
+          <button type="button" id="seen-yes">Yes</button>
+          <button type="button" id="seen-no">No</button>
+        </div>
+      </div>
+      <p id="seen-yes-msg" data-msg="onboarding.seen.yes" hidden></p>
+      <div id="seen-no-msg" hidden>
+        <p data-msg="onboarding.seen.no"></p>
+        <ol>
+          <li>Open System Settings, then Notifications.</li>
+          <li>Choose Google Chrome.</li>
+          <li>Turn on Allow notifications.</li>
+        </ol>
+      </div>
+    </div>
+    <p style="margin-top:0.75rem">Never: page content, typing, forms, or private windows (unless you turn that on).</p>
+    <div class="actions">
+      <button type="button" class="btn-primary" data-step="3">Next</button>
+      <button type="button" data-step="1">Back</button>
+    </div>
+  </section>
+
+  <section data-state="3" aria-labelledby="s3-h" hidden>
+    <p class="step-indicator">Step 3 of 3</p>
+    <h2 id="s3-h">How should it check in?</h2>
+    <fieldset>
+      <legend>Check-in style</legend>
+      <div class="radio-cards">
+        <label class="radio-card"><input type="radio" name="mode" value="gentle" checked><span><strong>Gentle (recommended)</strong><span>A quiet notice. No sounds, no pop-ups.</span></span></label>
+        <label class="radio-card"><input type="radio" name="mode" value="adaptive"><span><strong>Adaptive</strong><span>Starts gentle. Gets a little firmer if a check-in is missed.</span></span></label>
+        <label class="radio-card"><input type="radio" name="mode" value="strict"><span><strong>Strict</strong><span>Sound and an optional full-page reminder.</span></span></label>
+      </div>
+    </fieldset>
+    <div id="sound-box" class="card" hidden>
+      <label for="vol">Volume</label>
+      <input type="range" id="vol" min="0" max="100" value="50">
+      <div class="actions"><button type="button" id="play"><i data-icon="speaker"></i>Play sample sound</button></div>
+    </div>
+    <div class="actions">
+      <a class="button btn-primary" href="panel.html#create">Start my first session</a>
+      <button type="button" id="finish">Finish setup</button>
+      <button type="button" data-step="2">Back</button>
+    </div>
+    <p id="finish-msg" role="status" class="proto-note"></p>
+  </section>
+</main>
+<footer class="page footer-help"><a href="index.html#how" data-msg="label.help"></a></footer>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  FB.init();
+  const $ = function (id) { return document.getElementById(id); };
+  const main = document.querySelector("main");
+  function go(n) {
+    const sec = FB.showState(main, String(n));
+    FB.focusEl(sec.querySelector("h2"));
+  }
+  document.addEventListener("click", function (e) {
+    const b = e.target.closest("[data-step]");
+    if (b) go(b.dataset.step);
+  });
+  $("test-notif").addEventListener("click", function () {
+    $("test-sent").textContent = "Prototype: a test notification was sent.";
+    $("seen-q").hidden = false;
+  });
+  $("seen-yes").addEventListener("click", function () {
+    $("seen-yes-msg").hidden = false; $("seen-no-msg").hidden = true;
+    FB.focusEl($("seen-yes-msg"));
+  });
+  $("seen-no").addEventListener("click", function () {
+    $("seen-no-msg").hidden = false; $("seen-yes-msg").hidden = true;
+    FB.focusEl($("seen-no-msg").querySelector("p"));
+  });
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener("change", function () { $("sound-box").hidden = r.value === "gentle" && r.checked; });
+  });
+  $("play").addEventListener("click", function () { FB.tone(Number($("vol").value) / 100); });
+  $("finish").addEventListener("click", function () {
+    $("finish-msg").textContent = "Prototype: this would close the tab. Gentle stays selected unless you changed it.";
+  });
+})();
+</script>
+</body>
+</html>

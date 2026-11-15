@@ -249,7 +249,7 @@ A pure function: `decide(episode, prefs, history, now) → Intervention | none`.
 - Why: it works while the SW is asleep, needs no long-lived ports (which would keep the SW alive), and every open page and window sees the same state.
 - `storage.session` is cleared on browser restart. The SW republishes during startup reconciliation.
 - The snapshot is published **only when its content changes**, not on every tick. It carries `endsAt` and `breakEndsAt`, and pages compute countdowns themselves (frozen while PAUSED).
-- The snapshot never contains titles, except the recovery suggestion the user is meant to see (live title, in memory). The current-context label is a host, "Excluded site" or "Private window". "View what's recorded" uses an explicit request/response command.
+- The snapshot never contains titles, except the recovery suggestion the user is meant to see (live title, in memory). The current-context label is a host, "Private site", "Private window" or "Browser page". "View what's recorded" uses an explicit request/response command.
 
 ---
 

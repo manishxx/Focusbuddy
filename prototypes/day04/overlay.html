@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Top 10 Football Goals (fake page) · Overlay prototype</title>
+<style>
+  /* Styles of the FAKE third-party page. Deliberately not Focus Buddy styles. */
+  :root { color-scheme: light dark; --p-bg: #fafafa; --p-text: #1d1d1d; --p-muted: #555555; --p-accent: #14532d; --p-card: #e9e9e9; --p-focus: #1f4fbf; }
+  @media (prefers-color-scheme: dark) { :root { --p-bg: #161616; --p-text: #ececec; --p-muted: #b5b5b5; --p-accent: #86efac; --p-card: #2a2a2a; --p-focus: #9cc0ff; } }
+  body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: var(--p-bg); color: var(--p-text); line-height: 1.5; font-size: 1rem; }
+  header, main, footer { max-width: 50rem; margin: 0 auto; padding: 1rem; }
+  header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+  .logo { font-weight: 700; font-size: 1.25rem; color: var(--p-accent); }
+  nav ul { list-style: none; display: flex; gap: 1rem; margin: 0; padding: 0; flex-wrap: wrap; }
+  a { color: var(--p-accent); }
+  :focus-visible { outline: 3px solid var(--p-focus); outline-offset: 2px; }
+  ol { padding-left: 1.5rem; }
+  ol li { margin-bottom: 1rem; }
+  .thumb { background: var(--p-card); border-radius: 6px; height: 7rem; display: flex; align-items: center; justify-content: center; color: var(--p-muted); font-size: 0.875rem; }
+  .proto-bar { font-family: system-ui, sans-serif; border: 2px dashed var(--p-muted); padding: 0.75rem; border-radius: 8px; margin: 1rem; }
+  .proto-bar h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+  .proto-bar button { font: inherit; min-height: 2.75rem; padding: 0.375rem 1rem; border-radius: 8px; border: 1px solid var(--p-muted); background: var(--p-bg); color: var(--p-text); cursor: pointer; }
+  #proto-log { font-size: 0.875rem; }
+</style>
+</head>
+<body>
+<aside class="proto-bar" aria-labelledby="pb-h">
+  <h2 id="pb-h">Prototype controls</h2>
+  <p style="margin:0 0 0.5rem">The page below is a fake website. The Strict full-page reminder (F5) opens on load.</p>
+  <button type="button" id="reopen">Show the full-page reminder again</button>
+  <p id="proto-log" role="status"></p>
+  <p style="margin:0"><a href="index.html">Back to the prototype gallery</a></p>
+</aside>
+
+<header>
+  <span class="logo">Sports Daily</span>
+  <nav aria-label="Site"><ul><li><a href="#top">Football</a></li><li><a href="#top">Tennis</a></li><li><a href="#top">Videos</a></li></ul></nav>
+</header>
+<main id="top">
+  <h1>Top 10 Football Goals</h1>
+  <p>A placeholder article on a fake site. No real images or videos load here.</p>
+  <ol>
+    <li><div class="thumb" aria-hidden="true">Video placeholder 1</div><p>A long-range strike in the final minute.</p></li>
+    <li><div class="thumb" aria-hidden="true">Video placeholder 2</div><p>A bicycle kick from the edge of the box.</p></li>
+    <li><div class="thumb" aria-hidden="true">Video placeholder 3</div><p>A solo run past four defenders.</p></li>
+    <li><p>A free kick over the wall.</p></li>
+    <li><p>A volley from a corner.</p></li>
+  </ol>
+  <p><a href="#top">Read more football stories</a></p>
+</main>
+<footer><p>Sports Daily is a made-up site for this prototype.</p></footer>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  const t = FB.t;
+  const COUNTDOWN_SEC = 5;          // prefs.overlay.countdownSec, 5–10
+  const log = document.getElementById("proto-log");
+
+  // Tokens are duplicated inside the shadow root: the real overlay can't rely on page CSS
+  // or on Focus Buddy's stylesheet. Same values (and contrast) as styles.css.
+  const CSS = `
+    :host { all: initial; }
+    dialog { --bg:#ffffff; --surface:#f3f6f7; --text:#1a2329; --muted:#4a5960; --border:#68777e; --primary:#0b6b78; --on-primary:#ffffff; --focus:#1f4fbf; --check:#8a5300;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.5; color: var(--text);
+      background: var(--bg); border: 2px solid var(--check); border-radius: 14px; padding: 1.25rem;
+      width: min(26rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow-y: auto; box-sizing: border-box;
+      box-shadow: 0 8px 32px rgb(0 0 0 / 0.3); animation: fade 0.2s ease-out; }
+    dialog::backdrop { background: rgb(10 20 24 / 0.55); }
+    @media (prefers-color-scheme: dark) { dialog { --bg:#121a1d; --surface:#1b2528; --text:#e7eef0; --muted:#aab8be; --border:#869aa2; --primary:#5ccad8; --on-primary:#06262b; --focus:#9cc0ff; --check:#f2b552; } }
+    .top { display: flex; gap: 1rem; align-items: center; }
+    h2 { font-size: 1.25rem; line-height: 1.25; margin: 0; }
+    p { margin: 0.5rem 0; }
+    .ring { position: relative; width: 3rem; height: 3rem; flex: none; }
+    .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ring circle { fill: none; stroke-width: 4; }
+    .ring .track { stroke: var(--border); }
+    .ring .bar { stroke: var(--primary); stroke-dasharray: 113.1; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+    .ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .line { color: var(--muted); font-size: 0.9375rem; }
+    .actions { display: grid; gap: 0.5rem; margin-top: 1rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .chips button { min-height: 2.25rem; border-radius: 999px; }
+    button { font: inherit; min-height: 2.75rem; padding: 0.375rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.375rem; }
+    button:hover { background: var(--surface); }
+    button.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .more { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; display: grid; gap: 0.5rem; }
+    .sub { padding: 0.25rem 0 0.5rem; }
+    .sub p { margin: 0 0 0.375rem; font-weight: 600; }
+    .chev { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; }
+    [aria-expanded="true"] .chev { transform: rotate(180deg); }
+    [hidden] { display: none !important; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      dialog { animation: none; }
+      .ring svg { display: none; }            /* number only */
+      .ring .bar { transition: none; }
+    }`;
+
+  const CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
+
+  // The real overlay uses attachShadow({ mode: "closed" }) (API_CONTRACTS §4).
+  // OPEN mode here so automated checks (axe, puppeteer) can inspect the prototype.
+  const host = document.createElement("div");
+  host.id = "fb-overlay-host";
+  document.body.appendChild(host);
+  const root = host.attachShadow({ mode: "open" });
+
+  let returnFocus = null;
+  let timer = null;
+  let dlg = null;
+
+  function btn(attrs, text) {
+    const b = document.createElement("button");
+    b.type = "button";
+    Object.keys(attrs).forEach(function (k) { b.setAttribute(k, attrs[k]); });
+    b.textContent = text;
+    return b;
+  }
+
+  function render() {
+    root.innerHTML = "<style>" + CSS + "</style>" +
+      '<dialog role="alertdialog" aria-labelledby="ov-title" aria-describedby="ov-body">' +
+        '<div class="top">' +
+          '<div class="ring" aria-hidden="true"><svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="18"/><circle class="bar" cx="22" cy="22" r="18"/></svg><span class="num"></span></div>' +
+          '<h2 id="ov-title"></h2>' +
+        "</div>" +
+        '<p id="ov-body"></p>' +
+        '<p class="line" id="ov-line"></p>' +
+        '<div id="ov-main">' +
+          '<div class="actions" id="ov-visible"></div>' +
+          '<div class="more actions" id="ov-more" hidden>' +
+            '<div id="ov-break-wrap"></div>' +
+            '<div class="sub" id="ov-break" role="group" aria-labelledby="ov-break-q" hidden><p id="ov-break-q"></p><div class="chips"></div></div>' +
+            '<div id="ov-mute-wrap"></div>' +
+            '<div class="sub" id="ov-mute" role="group" aria-labelledby="ov-mute-q" hidden><p id="ov-mute-q"></p><div class="chips"></div></div>' +
+            '<div id="ov-stop-wrap"></div>' +
+          "</div>" +
+        "</div>" +
+        '<div id="ov-confirm" hidden>' +
+          '<p id="ov-confirm-q"></p>' +
+          '<div class="actions"></div>' +
+        "</div>" +
+      "</dialog>";
+    const q = function (s) { return root.querySelector(s); };
+    q("#ov-title").textContent = t("overlay.title.generic");     // generic by default (FR-I12)
+    q("#ov-body").textContent = t("overlay.body");
+    const vis = q("#ov-visible");
+    vis.append(
+      btn({ class: "primary", "data-act": "back" }, t("action.back")),
+      btn({ "data-act": "relevant" }, t("action.relevant")),
+      btn({ "data-act": "continue" }, t("action.continueAnyway")),
+      btn({ id: "ov-more-btn", "aria-expanded": "false", "aria-controls": "ov-more" }, t("action.more"))
+    );
+    q("#ov-more-btn").insertAdjacentHTML("beforeend", CHEV);
+    q("#ov-break-wrap").replaceWith(btn({ id: "ov-break-btn", "aria-expanded": "false", "aria-controls": "ov-break" }, t("action.break")));
+    q("#ov-mute-wrap").replaceWith(btn({ id: "ov-mute-btn", "aria-expanded": "false", "aria-controls": "ov-mute" }, t("action.mute")));
+    q("#ov-stop-wrap").replaceWith(btn({ "data-act": "stop" }, t("label.endSessionMenu")));
+    q("#ov-break-q").textContent = t("overlay.breakChooser");
+    [5, 10, 15].forEach(function (m) { q("#ov-break .chips").append(btn({ "data-break": m }, t("label.minutes", { minutes: m }))); });
+    q("#ov-mute-q").textContent = t("overlay.muteChooser");
+    q("#ov-mute .chips").append(
+      btn({ "data-mute": "15" }, t("label.minutes", { minutes: 15 })),
+      btn({ "data-mute": "60" }, t("label.minutes", { minutes: 60 })),
+      btn({ "data-mute": "rest" }, "Rest of session")
+    );
+    q("#ov-confirm-q").textContent = t("stop.confirm");
+    q("#ov-confirm .actions").append(
+      btn({ class: "primary", "data-act": "keep" }, t("stop.keepGoing")),
+      btn({ "data-act": "end" }, t("action.stop"))
+    );
+    dlg = q("dialog");
+    // Escape fires "cancel" on a modal dialog: close through our own path so focus returns.
+    dlg.addEventListener("cancel", function (e) { e.preventDefault(); close("Closed with Escape."); });
+  }
+
+  function startCountdown() {
+    let left = COUNTDOWN_SEC;
+    const num = root.querySelector(".num"), bar = root.querySelector(".bar"), line = root.querySelector("#ov-line");
+    const C = 113.1;
+    num.textContent = String(left);
+    line.textContent = t("overlay.countdown");
+    clearInterval(timer);
+    timer = setInterval(function () {
+      left -= 1;
+      num.textContent = String(Math.max(left, 0));
+      bar.style.strokeDashoffset = String(C * (1 - left / COUNTDOWN_SEC));
+      if (left <= 0) {
+        clearInterval(timer);
+        line.textContent = t("overlay.countdownDone");   // never auto-dismisses, never navigates
+      }
+    }, 1000);
+  }
+
+  function focusables() {
+    return Array.from(root.querySelectorAll("dialog button")).filter(function (b) { return b.offsetParent !== null || b.getClientRects().length; });
+  }
+
+  function open() {
+    if (dlg && dlg.open) return;
+    returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+    render();
+    if (typeof dlg.showModal !== "function") {
+      // Spec: no half-modal overlay. Fall back to the L2 notification + intervention page.
+      log.textContent = "showModal() unavailable: the real extension would fall back to the L2 notification.";
+      root.innerHTML = "";
+      return;
+    }
+    dlg.showModal();                     // top layer; the page becomes inert
+    startCountdown();
+    root.querySelector('[data-act="back"]').focus();
+  }
+
+  function close(msg) {
+    clearInterval(timer);
+    if (dlg && dlg.open) dlg.close();
+    root.innerHTML = "";
+    dlg = null;
+    if (msg) log.textContent = msg;
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    else document.getElementById("reopen").focus();
+  }
+
+  root.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { e.preventDefault(); close("Closed with Escape."); return; }  // Escape always closes the dialog
+    if (e.key !== "Tab") return;
+    // Keep Tab inside the dialog (otherwise it can move to the browser UI).
+    const f = focusables();
+    if (!f.length) return;
+    const i = f.indexOf(root.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (i === -1 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+  });
+
+  function toggle(b) {
+    const openNow = b.getAttribute("aria-expanded") !== "true";
+    b.setAttribute("aria-expanded", String(openNow));
+    root.getElementById(b.getAttribute("aria-controls")).hidden = !openNow;
+  }
+
+  // Prototype shortcut: the real overlay ignores clicks where event.isTrusted is false.
+  root.addEventListener("click", function (e) {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.hasAttribute("aria-expanded")) { toggle(b); return; }
+    if (b.dataset.break) { close("Take a break: a " + b.dataset.break + "-minute break would start."); return; }
+    if (b.dataset.mute) { close("Mute: sounds and full-page reminders would be muted (" + b.textContent + ")."); return; }
+    switch (b.dataset.act) {
+      case "back": close("Back to task: Focus Buddy would switch to your task tab."); break;
+      case "relevant": close("This is relevant: " + t("relevant.confirmHost", { host: "sportsdaily.example" }) + " (this session only)"); break;
+      case "continue": close("Continue anyway: no more check-ins for this episode until the cooldown ends."); break;
+      case "stop":
+        root.querySelector("#ov-main").hidden = true;
+        root.querySelector("#ov-confirm").hidden = false;
+        root.querySelector('[data-act="keep"]').focus();      // safe option focused
+        break;
+      case "keep":
+        root.querySelector("#ov-confirm").hidden = true;
+        root.querySelector("#ov-main").hidden = false;
+        root.querySelector("#ov-more-btn").focus();
+        break;
+      case "end": close("End session: the session would end and the summary would show in the side panel."); break;
+    }
+  });
+
+  document.getElementById("reopen").addEventListener("click", open);
+
+  FB.init();
+  open();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-in · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- F4 intervention page: full action set when the side panel is closed (SD-3).
+     Opened by a notification body click or as the L2 fallback.
+     intervention.html#relevant opens at the "This is relevant" step (notification button). -->
+<header class="page">
+  <p class="small" style="margin:0"><a href="index.html">Prototype gallery</a></p>
+</header>
+<main class="page" style="max-width:32rem">
+  <h1 id="page-h" tabindex="-1">Focus Buddy</h1>
+  <p class="status-line"><i data-icon="bubble"></i><span data-msg="status.drifted"></span></p>
+
+  <section id="view-card" class="card card-check" role="alert" aria-labelledby="iv-title" aria-describedby="iv-body">
+    <h2 id="iv-title" data-msg="alert.l2.title"></h2>
+    <p id="iv-body" data-msg="alert.l2.body"></p>
+    <div data-actions="iv"></div>
+  </section>
+
+  <section id="view-relevant" class="card card-soft" aria-labelledby="rw-h" hidden>
+    <h2 id="rw-h" data-msg="relevant.title"></h2>
+    <p data-msg="relevant.words" data-vars='{"host":"youtube.com"}'></p>
+    <div class="field">
+      <label for="rw-words" data-msg="relevant.wordsLabel"></label>
+      <input type="text" id="rw-words" autocomplete="off" aria-describedby="rw-help">
+      <p class="hint" id="rw-help" data-msg="relevant.wordsHelp"></p>
+    </div>
+    <div class="check-row"><input type="checkbox" id="rw-remember"><label for="rw-remember" data-msg="relevant.remember"></label></div>
+    <div class="actions">
+      <button type="button" class="btn-primary" id="rw-save" data-msg="relevant.save"></button>
+      <button type="button" id="rw-back">Back</button>
+    </div>
+  </section>
+
+  <section id="view-confirm" class="card" aria-labelledby="iv-stop-h" hidden>
+    <h2 id="iv-stop-h" data-msg="stop.confirm"></h2>
+    <div class="actions">
+      <button type="button" class="btn-primary" id="iv-keep" data-msg="stop.keepGoing"></button>
+      <button type="button" id="iv-end" data-msg="action.stop"></button>
+    </div>
+  </section>
+
+  <section id="view-done" class="card card-soft" aria-labelledby="done-msg" hidden>
+    <p id="done-msg" tabindex="-1"></p>
+  </section>
+
+  <p id="iv-result" role="status" class="proto-note"></p>
+  <p style="margin-top:1.5rem" data-msg="intervention.closeHint"></p>
+</main>
+<footer class="page footer-help"><a href="index.html#how" data-msg="label.help"></a></footer>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  FB.init();
+  const t = FB.t;
+  const $ = function (id) { return document.getElementById(id); };
+  const VIEWS = ["view-card", "view-relevant", "view-confirm", "view-done"];
+  function show(id) { VIEWS.forEach(function (v) { $(v).hidden = v !== id; }); }
+  const RESULT = {
+    back: "Prototype: this would switch to your last task tab and close this page.",
+    "break": "Prototype: the break chooser would open (5, 10 or 15 minutes).",
+    mute: "Prototype: the mute chooser would open (15 min, 1 hour, rest of session).",
+  };
+  function openRelevant(focus) {
+    show("view-relevant");
+    $("rw-words").value = FB.SCENARIO.words;
+    if (focus) FB.focusEl($("rw-h"));
+  }
+  document.addEventListener("click", function (e) {
+    const a = e.target.closest("[data-act]");
+    if (!a) return;
+    if (a.dataset.act === "stop") { show("view-confirm"); $("iv-keep").focus(); return; }   // safe option focused
+    if (a.dataset.act === "relevant") { openRelevant(true); return; }
+    $("iv-result").textContent = RESULT[a.dataset.act];
+  });
+  function backToCard(focusSel) {
+    show("view-card");
+    const more = document.querySelector('#view-card [aria-controls="iv-more"]');
+    more.setAttribute("aria-expanded", "false"); $("iv-more").hidden = true;
+    document.querySelector(focusSel).focus();
+  }
+  $("iv-keep").addEventListener("click", function () { backToCard('#view-card [aria-controls="iv-more"]'); });
+  $("rw-back").addEventListener("click", function () { backToCard('#view-card [data-act="relevant"]'); });
+  $("iv-end").addEventListener("click", function () {
+    $("iv-result").textContent = "Prototype: the session would end and the side panel would show the summary.";
+    show("view-card"); $("view-card").hidden = true;
+    FB.focusEl($("page-h"));
+  });
+  $("rw-save").addEventListener("click", function () {
+    show("view-done");
+    $("done-msg").textContent = t("relevant.confirm", { host: "youtube.com", words: $("rw-words").value.trim() || FB.SCENARIO.words });
+    $("done-msg").focus();
+  });
+  if (location.hash === "#relevant") openRelevant(false);
+})();
+</script>
+</body>
+</html>

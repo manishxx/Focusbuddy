@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to settings</a>
+<header class="page">
+  <p class="small" style="margin:0"><a href="index.html">Prototype gallery</a></p>
+</header>
+
+<div class="page options-layout">
+  <nav class="options-nav" aria-label="Settings sections">
+    <ul>
+      <li><a href="#style">Check-in style</a></li>
+      <li><a href="#timing">Timing</a></li>
+      <li><a href="#sound">Sound</a></li>
+      <li><a href="#overlay">Full-page reminder</a></li>
+      <li><a href="#notifications">Notifications</a></li>
+      <li><a href="#shortcut">Keyboard shortcut</a></li>
+      <li><a href="#quiet">Quiet hours</a></li>
+      <li><a href="#incognito">Private windows</a></li>
+      <li><a href="#private">Private sites</a></li>
+      <li><a href="#remembered">Remembered pages</a></li>
+      <li><a href="#history">History</a></li>
+      <li><a href="#ai">AI</a></li>
+      <li><a href="#data">Data</a></li>
+    </ul>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <h1>Focus Buddy settings</h1>
+    <p class="small muted">Changes save as you make them.</p>
+
+    <section class="options-section" id="style" aria-labelledby="style-h">
+      <h2 id="style-h">Check-in style</h2>
+      <p>How firmly Focus Buddy checks in when a tab doesn't look related.</p>
+      <fieldset>
+        <legend>Default check-in style</legend>
+        <div class="radio-cards">
+          <label class="radio-card"><input type="radio" name="mode" value="gentle" checked><span><strong>Gentle (recommended)</strong><span>A quiet notice. No sounds, no pop-ups.</span></span></label>
+          <label class="radio-card"><input type="radio" name="mode" value="adaptive"><span><strong>Adaptive</strong><span>Starts gentle. Gets a little firmer if a check-in is missed.</span></span></label>
+          <label class="radio-card"><input type="radio" name="mode" value="strict"><span><strong>Strict</strong><span>Sound and an optional full-page reminder.</span></span></label>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="options-section" id="timing" aria-labelledby="timing-h">
+      <h2 id="timing-h">Timing</h2>
+      <p>When check-ins happen and how often they can repeat.</p>
+      <div class="field"><label for="drift">Check in after a tab looks unrelated for (seconds)</label><input type="number" id="drift" min="60" max="600" value="90" aria-describedby="drift-h"><p class="hint" id="drift-h">60 to 600. Default 90.</p></div>
+      <div class="field"><label for="recov">Count as back on task after (seconds)</label><input type="number" id="recov" min="10" max="120" value="20" aria-describedby="recov-h"><p class="hint" id="recov-h">10 to 120. Default 20.</p></div>
+      <fieldset>
+        <legend>Wait between check-ins (minutes)</legend>
+        <div class="field"><label for="cool-g">Gentle</label><input type="number" id="cool-g" min="10" max="120" value="15" aria-describedby="cool-g-h"><p class="hint" id="cool-g-h">At least 10. Default 15.</p></div>
+        <div class="field"><label for="cool-a">Adaptive</label><input type="number" id="cool-a" min="5" max="120" value="10" aria-describedby="cool-a-h"><p class="hint" id="cool-a-h">At least 5. Default 10.</p></div>
+        <div class="field" style="margin:0"><label for="cool-s">Strict</label><input type="number" id="cool-s" min="3" max="120" value="5" aria-describedby="cool-s-h"><p class="hint" id="cool-s-h">At least 3. Default 5.</p></div>
+      </fieldset>
+      <div class="field"><label for="perhour">Most check-ins per hour</label><input type="number" id="perhour" min="1" max="6" value="4" aria-describedby="perhour-h"><p class="hint" id="perhour-h">1 to 6. Default 4.</p></div>
+      <div class="field"><label for="persession">Most check-ins per session</label><input type="number" id="persession" min="1" max="30" value="12" aria-describedby="persession-h"><p class="hint" id="persession-h">1 to 30. Default 12.</p></div>
+      <div class="field"><label for="idle">Treat as idle after no input for (seconds)</label><input type="number" id="idle" min="15" max="1800" value="300" aria-describedby="idle-h"><p class="hint" id="idle-h">Idle time is never counted as drift.</p></div>
+    </section>
+
+    <section class="options-section" id="sound" aria-labelledby="sound-h">
+      <h2 id="sound-h">Sound</h2>
+      <p>A short tone with Adaptive and Strict check-ins. It always comes with a visual check-in.</p>
+      <div class="switch-row"><label for="sound-on">Play a sound</label><input type="checkbox" class="switch" id="sound-on" checked></div>
+      <div class="field"><label for="tone">Tone</label>
+        <select id="tone" style="max-width:14rem"><option value="chime" selected>Chime</option><option value="soft">Soft</option><option value="bell">Bell</option></select>
+      </div>
+      <div class="field"><label for="vol">Volume</label><input type="range" id="vol" min="0" max="100" value="50"></div>
+      <button type="button" id="play"><i data-icon="speaker"></i>Play sample sound</button>
+    </section>
+
+    <section class="options-section" id="overlay" aria-labelledby="overlay-h">
+      <h2 id="overlay-h">Full-page reminder</h2>
+      <p>Strict mode can show a card over the page. It needs permission to show on websites.</p>
+      <fieldset class="proto-controls" style="margin:0 0 1rem">
+        <legend>Prototype control: what Chrome answers</legend>
+        <div class="check-row"><input type="radio" name="perm-sim" id="perm-allow" value="allow"><label for="perm-allow">Allow</label></div>
+        <div class="check-row"><input type="radio" name="perm-sim" id="perm-deny" value="deny" checked><label for="perm-deny">Deny</label></div>
+      </fieldset>
+      <div class="switch-row"><label for="ov-on">Show a full-page reminder (Strict mode)</label><input type="checkbox" class="switch" id="ov-on"></div>
+      <div id="ov-denied" class="field-warning" hidden>
+        <i data-icon="info"></i>
+        <div>
+          <p id="ov-denied-text" data-msg="settings.overlayDenied"></p>
+          <button type="button" id="ov-retry" data-msg="label.tryAgain"></button>
+        </div>
+      </div>
+      <p id="ov-status" role="status" class="small"></p>
+      <div id="ov-held" hidden>
+        <button type="button" id="ov-revoke" data-msg="settings.revokeSiteAccess"></button>
+      </div>
+      <div class="field" style="margin-top:1rem"><label for="ov-count">Pause moment before the reminder settles (seconds)</label><input type="number" id="ov-count" min="5" max="10" value="5" aria-describedby="ov-count-h"><p class="hint" id="ov-count-h">5 to 10. Every button works during it.</p></div>
+      <div class="check-row"><input type="checkbox" id="ov-task" aria-describedby="ov-task-h"><label for="ov-task">Show task name on full-page reminders</label></div>
+      <p class="hint" id="ov-task-h"></p>
+    </section>
+
+    <section class="options-section" id="notifications" aria-labelledby="notif-h">
+      <h2 id="notif-h">Notifications</h2>
+      <p>Check-ins can also show as Chrome notifications.</p>
+      <div class="switch-row"><label for="notif-on">Show notifications</label><input type="checkbox" class="switch" id="notif-on" checked></div>
+      <div class="switch-row"><label for="priv">Private notifications</label><input type="checkbox" class="switch" id="priv" aria-describedby="priv-h"></div>
+      <p class="hint" id="priv-h">Hides your task name in notifications and the toolbar tooltip, for screen sharing or a lock screen.</p>
+      <button type="button" id="test-notif"><i data-icon="bell"></i>Send a test notification</button>
+      <p id="test-msg" role="status" class="small"></p>
+    </section>
+
+    <section class="options-section" id="shortcut" aria-labelledby="shortcut-h">
+      <h2 id="shortcut-h">Keyboard shortcut</h2>
+      <p>Alt+Shift+M mutes and pauses the session.</p>
+      <div class="field"><label for="shortcut-min">Mute and pause for</label>
+        <select id="shortcut-min" style="max-width:14rem">
+          <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60" selected>60 minutes</option><option value="120">120 minutes</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="options-section" id="quiet" aria-labelledby="quiet-h">
+      <h2 id="quiet-h">Quiet hours</h2>
+      <p>During quiet hours, check-ins stay visual: no sound, no full-page reminder.</p>
+      <div class="switch-row"><label for="quiet-on">Use quiet hours</label><input type="checkbox" class="switch" id="quiet-on"></div>
+      <div id="quiet-times" hidden>
+        <div class="field"><label for="quiet-from">From</label><input type="time" id="quiet-from" value="21:00"></div>
+        <div class="field"><label for="quiet-to">To</label><input type="time" id="quiet-to" value="07:00"></div>
+      </div>
+    </section>
+
+    <section class="options-section" id="incognito" aria-labelledby="incog-h">
+      <h2 id="incog-h">Private windows</h2>
+      <p>Off by default. Private windows aren't checked unless you turn this on.</p>
+      <div class="switch-row"><label for="incog-on" data-msg="settings.incognito"></label><input type="checkbox" class="switch" id="incog-on" aria-describedby="incog-help"></div>
+      <p class="hint" id="incog-help" data-msg="settings.incognitoHelp"></p>
+    </section>
+
+    <section class="options-section" id="private" aria-labelledby="private-h">
+      <h2 id="private-h">Private sites</h2>
+      <p>These are never checked. Focus Buddy records "private site" and a time, never the site.</p>
+      <h3>Built in (always on)</h3>
+      <ul>
+        <li>Banking and payments</li>
+        <li>Sign-in, account and security pages</li>
+        <li>Email</li>
+        <li>Private messaging and chat</li>
+        <li>Health and medical</li>
+        <li>Legal</li>
+        <li>Dating and adult</li>
+        <li>Job search</li>
+        <li>Government ID services</li>
+      </ul>
+      <h3>Your private sites</h3>
+      <ul class="chips" id="excl-list"></ul>
+      <div class="inline-add">
+        <div class="field"><label for="excl-add">Add a site</label><input type="text" id="excl-add" autocomplete="off" aria-describedby="excl-h"></div>
+        <button type="button" id="excl-add-btn">Add</button>
+      </div>
+      <p class="hint" id="excl-h">For example: mybank.example</p>
+    </section>
+
+    <section class="options-section" id="remembered" aria-labelledby="rem-h">
+      <h2 id="rem-h">Remembered pages</h2>
+      <p>Pages you marked "This is relevant" and asked to remember for future sessions.</p>
+      <ul id="rem-list" class="stack" style="list-style:none;padding:0"></ul>
+      <p id="rem-empty" hidden class="muted" data-msg="settings.noOverrides"></p>
+      <p id="rem-msg" role="status" class="small"></p>
+    </section>
+
+    <section class="options-section" id="history" aria-labelledby="hist-h">
+      <h2 id="hist-h">History</h2>
+      <p>How long session summaries are kept on this computer.</p>
+      <div class="field"><label for="retain">Keep summaries for (days)</label><input type="number" id="retain" min="0" max="90" value="30" aria-describedby="retain-h"><p class="hint" id="retain-h">0 to 90. 0 means summaries aren't kept after the session.</p></div>
+    </section>
+
+    <section class="options-section" id="ai" aria-labelledby="ai-h">
+      <h2 id="ai-h">AI</h2>
+      <p>Not available in this version.</p>
+      <div class="switch-row"><label for="ai-on">Use AI to help sort tabs</label><input type="checkbox" class="switch" id="ai-on" disabled aria-describedby="ai-hint"></div>
+      <p class="hint" id="ai-hint">Off. Nothing is sent anywhere. A later version may offer this, and it will ask first.</p>
+    </section>
+
+    <section class="options-section" id="data" aria-labelledby="data-h">
+      <h2 id="data-h">Data</h2>
+      <p>See what's saved, or delete it all.</p>
+      <div class="actions">
+        <button type="button" id="view-rec" aria-expanded="false" aria-controls="recorded" data-msg="label.viewRecorded"></button>
+        <button type="button" id="del-open">Delete all data…</button>
+      </div>
+      <p id="del-done" role="status"></p>
+
+      <div id="recorded" hidden style="margin-top:1rem">
+        <h3 id="rec-h">What's saved right now</h3>
+        <p data-msg="privacy.neverSaved"></p>
+        <div class="table-wrap">
+          <table>
+            <caption>Sites in your sessions</caption>
+            <thead><tr><th scope="col">Site</th><th scope="col">Minutes</th><th scope="col">Counted as</th></tr></thead>
+            <tbody>
+              <tr><td>scholar.google.com</td><td>41</td><td>Part of the task</td></tr>
+              <tr><td>claude.ai</td><td>48</td><td>Part of the task</td></tr>
+              <tr><td>classroom.google.com</td><td>22</td><td>Part of the task</td></tr>
+              <tr><td>youtube.com</td><td>19</td><td>Part of the task</td></tr>
+              <tr><td>Other sites (not named)</td><td>25</td><td>Not related</td></tr>
+              <tr><td>Private sites (not named)</td><td>6</td><td>Private, not checked</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-top:1rem">
+          <table>
+            <caption>Remembered pages</caption>
+            <thead><tr><th scope="col">Site</th><th scope="col">Words you chose</th></tr></thead>
+            <tbody id="rec-overrides"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-top:1rem">
+          <table>
+            <caption>Past summaries</caption>
+            <thead><tr><th scope="col">Date</th><th scope="col">Task</th><th scope="col">Planned</th><th scope="col">Spent</th></tr></thead>
+            <tbody>
+              <tr><td>15 Nov</td><td>Study Pattern Recognition</td><td>3 h</td><td>2 h 50 min</td></tr>
+              <tr><td>14 Nov</td><td>Write lab report</td><td>1 h</td><td>1 h 5 min</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="del-dialog" aria-labelledby="del-h" aria-describedby="del-desc">
+      <h2 id="del-h" data-msg="delete.title"></h2>
+      <p id="del-desc" data-msg="delete.confirm"></p>
+      <p class="label">This deletes:</p>
+      <ul>
+        <li>All sessions</li>
+        <li>History (session summaries)</li>
+        <li>Remembered pages</li>
+        <li>The current session</li>
+        <li>Website access for full-page reminders</li>
+      </ul>
+      <p id="del-running" class="field-warning"><i data-icon="info"></i><span data-msg="delete.sessionRunning"></span></p>
+      <div class="check-row"><input type="checkbox" id="del-reset"><label for="del-reset">Also reset my settings</label></div>
+      <p id="del-reset-warn" class="field-warning" hidden><i data-icon="warning"></i><span data-msg="delete.resetWarning"></span></p>
+      <div class="actions">
+        <button type="button" id="del-cancel" autofocus>Cancel</button>
+        <button type="button" class="btn-danger" id="del-go">Delete everything</button>
+      </div>
+    </dialog>
+  </main>
+</div>
+<footer class="page footer-help"><a href="index.html#how" data-msg="label.help"></a></footer>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  FB.init();
+  const t = FB.t;
+  const $ = function (id) { return document.getElementById(id); };
+
+  $("play").addEventListener("click", function () { FB.tone(Number($("vol").value) / 100); });
+
+  // Full-page reminder: permission request on the toggle (user gesture), denied path, revoke.
+  function setHeld(held) {
+    $("ov-on").checked = held;
+    $("ov-held").hidden = !held;
+    $("ov-denied").hidden = true;
+    $("ov-on").removeAttribute("aria-describedby");
+  }
+  function request() {
+    if ($("perm-deny").checked) {
+      $("ov-on").checked = false;
+      $("ov-denied").hidden = false;
+      $("ov-on").setAttribute("aria-describedby", "ov-denied-text");
+      return false;
+    }
+    setHeld(true);
+    $("ov-status").textContent = "Full-page reminders are on.";
+    return true;
+  }
+  $("ov-on").addEventListener("change", function () {
+    $("ov-status").textContent = "";
+    if (this.checked) request();
+    else { setHeld(false); $("ov-status").textContent = "Full-page reminders are off. Website access is kept until you remove it."; $("ov-held").hidden = false; }
+  });
+  $("ov-retry").addEventListener("click", function () {
+    if (request()) $("ov-on").focus();
+    else $("ov-status").textContent = "Chrome still didn't give permission.";
+  });
+  $("ov-revoke").addEventListener("click", function () {
+    setHeld(false);
+    $("ov-status").textContent = "Website access removed. Full-page reminders are off.";
+    $("ov-on").focus();
+  });
+
+  // Private notifications gates "show task name".
+  function syncTask() {
+    $("ov-task").disabled = $("priv").checked;
+    if ($("priv").checked) $("ov-task").checked = false;
+    $("ov-task-h").textContent = $("priv").checked ? "Available when Private notifications is off." : "Off by default. The reminder says “your session” instead.";
+  }
+  $("priv").addEventListener("change", syncTask);
+  syncTask();
+
+  $("test-notif").addEventListener("click", function () { $("test-msg").textContent = "Prototype: a test notification was sent."; });
+  $("quiet-on").addEventListener("change", function () { $("quiet-times").hidden = !this.checked; });
+
+  // Private sites (user list)
+  function chip(text) {
+    const li = document.createElement("li");
+    li.className = "chip";
+    li.innerHTML = "<span></span><button type=\"button\">" + FB.icon("close") + "</button>";
+    li.firstChild.textContent = text;
+    const b = li.lastChild;
+    b.setAttribute("aria-label", "Remove " + text); b.title = "Remove " + text;
+    b.addEventListener("click", function () {
+      const next = li.nextElementSibling || li.previousElementSibling;
+      li.remove();
+      (next ? next.querySelector("button") : $("excl-add")).focus();
+    });
+    $("excl-list").appendChild(li);
+  }
+  ["mybank.example", "clinic-portal.example"].forEach(chip);
+  $("excl-add-btn").addEventListener("click", function () {
+    const v = $("excl-add").value.trim();
+    if (v) { chip(v); $("excl-add").value = ""; }
+    $("excl-add").focus();
+  });
+
+  // Remembered pages (overrides.list / overrides.remove)
+  const OVERRIDES = [["youtube.com", "K Nearest Neighbors"], ["docs.google.com", "chapter 2 notes"]];
+  function renderRemembered() {
+    const ul = $("rem-list"); ul.innerHTML = "";
+    const tb = $("rec-overrides"); tb.innerHTML = "";
+    OVERRIDES.forEach(function (o, i) {
+      const li = document.createElement("li");
+      li.className = "card";
+      li.style.display = "flex"; li.style.flexWrap = "wrap"; li.style.gap = "0.5rem"; li.style.justifyContent = "space-between"; li.style.alignItems = "center";
+      li.innerHTML = "<span><strong></strong><br><span class=\"small muted\"></span></span><button type=\"button\">Remove</button>";
+      li.querySelector("strong").textContent = o[0];
+      li.querySelector(".muted").textContent = "Titles containing “" + o[1] + "”";
+      const b = li.querySelector("button");
+      b.setAttribute("aria-label", "Remove " + o[0] + ", " + o[1]);
+      b.addEventListener("click", function () {
+        OVERRIDES.splice(i, 1);
+        renderRemembered();
+        $("rem-msg").textContent = t("settings.removedOverride", { host: o[0] });
+        const first = $("rem-list").querySelector("button");
+        FB.focusEl(first || $("rem-h"));
+      });
+      ul.appendChild(li);
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td></td><td></td>";
+      tr.children[0].textContent = o[0]; tr.children[1].textContent = o[1];
+      tb.appendChild(tr);
+    });
+    $("rem-empty").hidden = OVERRIDES.length > 0;
+    if (!OVERRIDES.length) { tb.innerHTML = "<tr><td colspan=\"2\"></td></tr>"; tb.querySelector("td").textContent = t("settings.noOverrides"); }
+  }
+  renderRemembered();
+
+  // View what's recorded (disclosure); options.html#recorded opens it.
+  function showRecorded(open, focus) {
+    $("view-rec").setAttribute("aria-expanded", String(open));
+    $("recorded").hidden = !open;
+    if (open && focus) FB.focusEl($("rec-h"));
+  }
+  $("view-rec").addEventListener("click", function () { showRecorded($("recorded").hidden, false); });
+  if (location.hash === "#recorded") showRecorded(true, true);
+
+  // Delete all data dialog: Cancel has default focus; focus returns to the opener.
+  const dlg = $("del-dialog");
+  $("del-reset").addEventListener("change", function () {
+    $("del-reset-warn").hidden = !this.checked;
+    if (this.checked) this.setAttribute("aria-describedby", "del-reset-warn"); else this.removeAttribute("aria-describedby");
+  });
+  $("del-open").addEventListener("click", function () {
+    $("del-reset").checked = false;
+    $("del-reset-warn").hidden = true;
+    $("del-reset").removeAttribute("aria-describedby");
+    dlg.showModal();
+    $("del-cancel").focus();
+  });
+  $("del-cancel").addEventListener("click", function () { dlg.close("cancel"); });
+  $("del-go").addEventListener("click", function () { dlg.close("delete"); });
+  dlg.addEventListener("close", function () {
+    if (dlg.returnValue === "delete") {
+      $("del-done").textContent = $("del-reset").checked ? t("delete.doneReset") : t("delete.done");
+      OVERRIDES.length = 0; renderRemembered();
+      if ($("del-reset").checked) $("excl-list").innerHTML = "";
+      setHeld(false);
+    }
+    dlg.returnValue = "";
+    $("del-open").focus();
+  });
+})();
+</script>
+</body>
+</html>

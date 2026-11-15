@@ -341,7 +341,7 @@ counts by hand. Day-28 beta targets:
 | OQ-3 | Topic-pack format and size budget; which subjects to bundle in V1. | Architect | Day 11 |
 | OQ-4 | Minimum Chrome version given `chrome.alarms` 30 s granularity and side-panel APIs. | Architect | Day 2 |
 | OQ-5 | Does the owner have an Android device for Day 22–26? | Owner | Before Day 22 |
-| OQ-6 | Default mode at first run: Gentle (proposed) or ask during onboarding? | UX review | Day 4 |
+| OQ-6 | Default mode at first run: Gentle (proposed) or ask during onboarding? **Resolved Day 04 (D-018): ask, with Gentle pre-selected.** | UX review | Day 4 |
 | OQ-7 | Does a notification click count as a user gesture for `sidePanel.open()`? (Reviewer unsure.) | Architect | Day 2 spike |
 | OQ-8 | Side-panel behaviour for incognito windows in spanning mode. | Architect | Day 2 spike |
 

@@ -1,0 +1,129 @@
+{
+  "$comment": "v3 (Day 04 re-review). Case-insensitive regexes, tested against the raw string AND a normalised copy (invisible chars removed, letter-spacing and hyphen-spacing collapsed, digit-for-letter swaps undone, numeric placeholders filled with 12). Allow entries remove one exact substring from one key before testing; anything else in that string is still checked.",
+  "version": 3,
+  "patterns": [
+    {
+      "re": "\\bfail(ed|ure|ing|s)?\\b",
+      "why": "shame"
+    },
+    {
+      "re": "\\bwast(e|ed|es|ing)\\b",
+      "why": "shame"
+    },
+    {
+      "re": "\\blazy\\b|\\bunproductive\\b|\\bslack(er|ing)?\\b",
+      "why": "shame / label"
+    },
+    {
+      "re": "\\b(caught|busted|spotted|noticed) you\\b|\\bbusted\\b|\\bgot caught\\b|\\bdetected\\b|\\bsaw you\\b",
+      "why": "surveillance tone"
+    },
+    {
+      "re": "\\bwatching you\\b|\\bmonitoring you\\b|\\btracking you\\b|\\bkeeping an eye\\b",
+      "why": "surveillance tone"
+    },
+    {
+      "re": "shame|ashamed|disappoint|\\bguilt|\\bembarrass",
+      "why": "shame / guilt"
+    },
+    {
+      "re": "procrastinat",
+      "why": "label"
+    },
+    {
+      "re": "\\bdistract(ed|ion|ions)?\\b",
+      "why": "labels the person"
+    },
+    {
+      "re": "\\boff[- ](task|track)\\b|\\bdetour",
+      "why": "labels the behaviour"
+    },
+    {
+      "re": "\\byou (should|must|need to|have to|promised|said you)\\b",
+      "why": "demand / guilt"
+    },
+    {
+      "re": "\\bno excuses?\\b",
+      "why": "blame"
+    },
+    {
+      "re": "\\bagain\\s*[?!]|\\b(drifted|distracted|away|off|wandered|here|this) again\\b|\\byet another\\b|\\bonce again\\b",
+      "why": "counting relapses"
+    },
+    {
+      "re": "\\b(second|third|fourth|fifth|\\d+(st|nd|rd|th)) time\\b|\\b\\d+ times (this|today|in)\\b",
+      "why": "counting relapses"
+    },
+    {
+      "re": "\\byou keep\\b|\\byou always\\b|\\byou never\\b|\\bevery time\\b",
+      "why": "generalising blame"
+    },
+    {
+      "re": "\\bwhat are you doing\\b|\\bwhy are you\\b|\\bwhat happened\\b",
+      "why": "accusation"
+    },
+    {
+      "re": "\\b(get )?back to work\\b|^\\s*focus[.!]?\\s*$|\\bfocus!|\\bdo your work\\b",
+      "why": "command"
+    },
+    {
+      "re": "\\bseriously\\b|\\bcome on\\b|\\bugh\\b",
+      "why": "exasperation"
+    },
+    {
+      "re": "\\bjust (get|go|do|focus|start|stop|come|try|need|open|close)\\b|\\bsimply\\b|\\bonly (took|takes|need|needed|focused|managed|did)\\b|\\bit's easy\\b",
+      "why": "minimiser"
+    },
+    {
+      "re": "\\bscore|\\bgrade\\b|\\bgraded\\b|\\bstreak|\\brank(ed|ing)?\\b|\\bpoints\\b|\\bpercent|\\d+\\s*%\\s*(focus|focused|on task|productive|of the time)",
+      "why": "scoring (FR-H3)"
+    },
+    {
+      "re": "\\bbad\\b|\\bpoor(ly)?\\b|\\byou('re| are| were)? (doing )?(it )?wrong\\b|\\bnaughty\\b",
+      "why": "judgement"
+    },
+    {
+      "re": "\\b(treat|treats|treatment|cure|cures|therapy|therapeutic|symptom|diagnos|medical benefit|clinically)",
+      "why": "clinical claim"
+    },
+    {
+      "re": "\\badhd\\b|\\byour brain\\b|\\bdisorder\\b",
+      "why": "naming the condition in-product"
+    },
+    {
+      "re": "\\b(been (on|away|off|elsewhere)|away for|off for|gone for|spent)\\b[^.]{0,30}?\\b\\d+\\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hours?)\\b",
+      "why": "counting time away (rule 6)"
+    },
+    {
+      "re": "\\b\\d+\\s*(s|sec|seconds?|min|minutes?)\\s+(away|off|lost|elsewhere|on (youtube|reddit|netflix|tiktok|instagram|this))\\b",
+      "why": "counting time away (rule 6)"
+    },
+    {
+      "re": "!!|\\?!|!\\?",
+      "why": "punctuation"
+    },
+    {
+      "re": "\\b(one|two|three|five|ten|fifteen|twenty|thirty|forty|fifty|sixty)\\s+(seconds?|minutes?|hours?)\\s+(away|elsewhere|off|gone|lost)\\b",
+      "why": "counting time away (rule 6)"
+    },
+    {
+      "re": "\\b(\\d+(st|nd|rd|th)|second|third|fourth|fifth) (check-in|reminder|nudge|alert|warning)\\b|\\bnot again\\b",
+      "why": "counting relapses"
+    },
+    {
+      "re": "\\bstop (scrolling|wasting|messing|playing|browsing|slacking)\\b|\\bhurry( up)?\\b|\\bbehind schedule\\b|\\brunning late\\b",
+      "why": "pressure / command"
+    },
+    {
+      "re": "\\bgive up\\b|\\bslip(ped|ping)\\b|\\bdo better\\b|\\btry harder\\b|\\bpull yourself\\b",
+      "why": "judgement"
+    }
+  ],
+  "allow": [
+    {
+      "key": "continue.panel",
+      "match": "away for about {awayMin} min",
+      "why": "D-018: absence length shown once, neutrally, after an absence auto-pause (BR-1)"
+    }
+  ]
+}

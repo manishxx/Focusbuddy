@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications mock · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="page">
+  <p class="small"><a href="index.html">Prototype gallery</a></p>
+</header>
+<main class="page" style="max-width:44rem">
+  <h1>Native notifications (static mock)</h1>
+  <div class="notice">
+    <i data-icon="info"></i>
+    <div>
+      <p>These are drawings of Chrome notifications, not real ones. Each has a title, a body and at most 2 buttons (SD-6).</p>
+      <p>macOS may hide the buttons, or the whole notification (SD-9). That's why every alert also updates the toolbar badge and the side panel, and the panel has the full set of choices.</p>
+      <p style="margin:0">With Private notifications on, the generic text is used and the task name isn't shown.</p>
+    </div>
+  </div>
+
+  <ul class="notif-list" id="list" style="margin-top:1.5rem"></ul>
+</main>
+<footer class="page footer-help"><a href="index.html#how" data-msg="label.help"></a></footer>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  const t = FB.t;
+  // [heading, titleKey or literal, bodyKey, body vars, button keys, badge, panel note]
+  const N = [
+    ["Session start", t("start.title"), t("start.body"), [], ["badge-on", "ON"], "Panel shows the active view."],
+    ["Session start (Private notifications)", t("start.title"), t("start.body.generic"), [], ["badge-on", "ON"], "Panel shows the active view."],
+    ["L1 check-in", "Focus Buddy", t("nudge.l1", { index: 0 }), ["action.back", "action.relevant"], ["badge-check", "?"], "Panel shows the L1 card. This is relevant opens the intervention page at the words step."],
+    ["L1 check-in (Private notifications)", "Focus Buddy", t("nudge.l1.generic", { index: 0 }), ["action.back", "action.relevant"], ["badge-check", "?"], "Panel shows the L1 card."],
+    ["L2 alert (stays until acted on)", t("alert.l2.title"), t("alert.l2.body"), ["action.back", "action.relevant"], ["badge-check", "?"], "Panel shows the card. Clicking the body opens the side panel, or the intervention page if it can't open."],
+    ["Break over", t("break.over.title"), t("break.over.body"), ["action.back", "break.moreMinutes"], ["badge-neutral", "BRK"], "Panel shows the same prompt until you choose."],
+    ["Continue your session?", t("continue.title"), t("continue.body"), ["continue.confirm", "continue.open"], ["badge-neutral", "II"], "No End button here on purpose (a misclick under macOS Options would be destructive). The panel card has Continue session, Change length and End session… (with one confirm)."],
+    ["Mute shortcut (Alt+Shift+M)", "Focus Buddy", t("mute.shortcut", { minutes: 60 }), [], ["badge-neutral", "II"], "Panel shows Paused."],
+  ];
+  const list = document.getElementById("list");
+  N.forEach(function (n, i) {
+    const li = document.createElement("li");
+    const hid = "n" + i;
+    li.innerHTML =
+      '<h2 id="' + hid + '" style="font-size:1.0625rem;margin:0"></h2>' +
+      '<div class="notif" role="group" aria-labelledby="' + hid + '">' +
+        '<div class="notif-head">' + FB.icon("bell") + "<span>Google Chrome · Focus Buddy</span></div>" +
+        '<p class="notif-title"></p><p class="notif-body"></p>' +
+        (n[3].length ? '<div class="notif-buttons"></div>' : "") +
+      "</div>" +
+      '<p class="small muted" style="margin:0">Also: toolbar badge <span class="badge ' + n[4][0] + '"></span> · <span class="panel-note"></span></p>';
+    li.querySelector("h2").textContent = n[0];
+    li.querySelector(".notif-title").textContent = n[1];
+    li.querySelector(".notif-body").textContent = n[2];
+    li.querySelector(".badge").textContent = n[4][1];
+    li.querySelector(".panel-note").textContent = n[5];
+    const bb = li.querySelector(".notif-buttons");
+    n[3].forEach(function (k) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = t(k);
+      b.addEventListener("click", function () { b.textContent = t(k) + " (prototype: clicked)"; });
+      bb && bb.appendChild(b);
+    });
+    list.appendChild(li);
+  });
+  FB.init();
+})();
+</script>
+</body>
+</html>

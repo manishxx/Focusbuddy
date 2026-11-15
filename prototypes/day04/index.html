@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype gallery · Focus Buddy</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="page">
+  <p class="small muted" style="margin:0">Day 04 static prototypes. Throwaway design mocks, not product code.</p>
+</header>
+<main class="page">
+  <h1>Focus Buddy prototypes</h1>
+  <p>Every V1 screen from the UX guidelines, using the message bank and the reference session: <strong>Study Pattern Recognition</strong>, goal “Finish chapters 1–4”, 3 h.</p>
+
+  <section aria-labelledby="screens-h">
+    <h2 id="screens-h">Screens</h2>
+    <ul class="gallery">
+      <li><a href="onboarding.html">First run</a><p>F1: three steps, Chrome's warnings explained, test notification, check-in style.</p></li>
+      <li><a href="panel.html">Side panel</a><p>F2–F10: create, confirm, active states, check-ins, break, pause, mute, extend, summary, notices.</p></li>
+      <li><a href="intervention.html">Intervention page</a><p>F4: the full set of choices when the side panel is closed.</p></li>
+      <li><a href="overlay.html">Full-page reminder</a><p>F5: Strict overlay on a fake web page, with the countdown and focus trap.</p></li>
+      <li><a href="notifications.html">Notifications</a><p>Drawings of each native notification, with what the badge and panel show.</p></li>
+      <li><a href="options.html">Settings</a><p>F11: every settings section, what's recorded, delete all data.</p></li>
+    </ul>
+
+    <h3>Side panel deep links</h3>
+    <ul class="chips" id="deep-links">
+      <li><a class="button" href="panel.html#create">Create</a></li>
+      <li><a class="button" href="panel.html#confirm">Confirm with warning</a></li>
+      <li><a class="button" href="panel.html#conflict">Already running</a></li>
+      <li><a class="button" href="panel.html#on_task">On task</a></li>
+      <li><a class="button" href="panel.html#drifted">Check-in card</a></li>
+      <li><a class="button" href="panel.html#recovery">Recovery</a></li>
+      <li><a class="button" href="panel.html#on-break">On a break</a></li>
+      <li><a class="button" href="panel.html#awaiting">Continue your session?</a></li>
+      <li><a class="button" href="panel.html#summary">Summary</a></li>
+    </ul>
+    <p class="small muted">The side panel's prototype controls list every state.</p>
+  </section>
+
+  <section aria-labelledby="badge-h" style="margin-top:2rem">
+    <h2 id="badge-h">Toolbar badge and tooltip</h2>
+    <p>From UX guidelines §2.1. Badge colours are fixed (teal #0b6e69, amber #8a5a00, slate #4a5560, white text) because the service worker can't read the browser theme. The badge never carries meaning alone: the tooltip and the panel say the same thing in words.</p>
+    <div class="table-wrap">
+      <table>
+        <caption>Badge and tooltip for each session state</caption>
+        <thead><tr><th scope="col">Session state</th><th scope="col">Badge</th><th scope="col">Tooltip key</th><th scope="col">Tooltip</th></tr></thead>
+        <tbody id="badge-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="how" aria-labelledby="how-h" style="margin-top:2rem" tabindex="-1">
+    <h2 id="how-h" data-msg="label.help"></h2>
+    <p>You describe your task, how long, and which sites you'll use. While the session runs, Focus Buddy checks each tab's title and site on this computer. When a tab doesn't look related for a while, it checks in, as firmly as the style you chose. Titles are never saved. You can pause, mute or end the session at any time.</p>
+    <p class="small muted">Prototype placeholder for the help link in the panel footer and settings header.</p>
+  </section>
+</main>
+
+<script src="messages.js"></script>
+<script src="proto.js"></script>
+<script>
+(function () {
+  "use strict";
+  FB.init();
+  const t = FB.t;
+  const TL = { timeLeft: "2 h 14 min" };
+  // [state, badge text, badge class, tooltip key, tooltip text] per §2.1 (fixed badge colours)
+  const ROWS = [
+    ["No session", "", "badge-none", "tooltip.none", t("tooltip.none")],
+    ["Active (any status except check-in waiting)", "ON", "badge-on", "tooltip.active", t("tooltip.active", TL)],
+    ["Active, Private notifications on", "ON", "badge-on", "tooltip.active.generic", t("tooltip.active.generic", TL)],
+    ["Active, check-in delivered", "?", "badge-check", "tooltip.checkin", t("tooltip.checkin")],
+    ["Paused", "II", "badge-neutral", "tooltip.paused", t("tooltip.paused")],
+    ["Paused, Private notifications on", "II", "badge-neutral", "tooltip.paused.generic", t("tooltip.paused.generic")],
+    ["Paused while you were away", "II", "badge-neutral", "tooltip.awaitingContinue", t("tooltip.awaitingContinue")],
+    ["On a break", "BRK", "badge-neutral", "tooltip.break", t("tooltip.break", { time: "3:40 pm" })],
+    ["Muted (badge unchanged)", "ON", "badge-on", "tooltip.active + tooltip.mutedSuffix", t("tooltip.active", TL) + t("tooltip.mutedSuffix", { time: "4:40 pm" })],
+  ];
+  const tb = document.getElementById("badge-rows");
+  ROWS.forEach(function (r) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td></td><td><span class="badge"></span></td><td><code></code></td><td></td>';
+    tr.children[0].textContent = r[0];
+    const b = tr.querySelector(".badge");
+    b.className = "badge " + r[2];
+    b.textContent = r[1] || "none";
+    tr.querySelector("code").textContent = r[3];
+    tr.children[3].textContent = "“" + r[4] + "”";
+    tb.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>

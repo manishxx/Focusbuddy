@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.0, approved Day 03** after two independent reviews. All findings applied |
+| Status | **v1.1 (Day 04, D-018).** v1.0 approved Day 03; v1.1 adds the commands and snapshot fields the Day 04 UX review found missing |
 | Scope | Messages between extension contexts. There's no external API: no `externally_connectable`, and no `onMessageExternal` listener |
 
 ## 1. Envelope
@@ -54,11 +54,16 @@ Content scripts can't forge `sender.url`: the browser sets it from the frame's c
 | `session.extend` | `{ minutes: 5–120 }` | Re-schedules the end alarm; total ≤ 480 | FR-S6 |
 | `session.stop` | `{}` | ENDING → summary → ENDED | FR-S6, H3 |
 | `session.updateNote` | `{ objective?: string, nextStep?: string }` | Updates the session | FR-S7 |
-| `session.addRelevant` | `{ host: string, titleSubstring?: string ≤ 60, remember: boolean }` | Adds an override (session or global). Refused with `invalid_state` for an excluded host (exclusion wins) | FR-T4, J8 |
+| `relevant.preview` | `{ interventionId }` | **v1.1.** Reply `{ host, mixedUse: boolean, suggestedWords?: string ≤ 60 }`. The SW reads the live title of the intervention's tab (`tabs.get`) and proposes words for mixed-use hosts. Nothing is stored; the reply is shown once and discarded. Excluded or private-window context → `invalid_state` | J8, D-018 |
+| `session.addRelevant` | `{ interventionId, words?: string ≤ 60, remember: boolean }` | **v1.1 (was `{host, titleSubstring}`).** The SW derives the host from the intervention, never from the page. `words` (user-edited, mixed-use hosts only) becomes `titleSubstring`. Also records the `relevant` response for that intervention, so the UI sends **one** command. `remember: false` = session-only override (`ActiveState.sessionOverrides`, deleted at session end); `true` = `overrides.global`. Refused with `invalid_state` for an excluded host | FR-T4, J8 |
 | `overrides.list` / `overrides.remove` | `{}` / `{ host, titleSubstring? }` | Manage remembered overrides | FR-H6 |
 | `break.start` | `{ minutes: 1–60 }` | ON_BREAK (BR-2) | FR-I5 |
 | `break.end` | `{}` | ACTIVE | J6 |
-| `intervention.respond` | `{ interventionId, response: "back" \| "relevant" \| "break" \| "mute" \| "stop" \| "continue", muteMinutes?: 15\|60\|-1, breakMinutes?: 1–60 }` | Records the response. `back` focuses the last relevant tab if it still exists (FR-R2). Unknown or stale id → `not_found` | FR-I5 |
+| `break.extend` | `{ minutes: 1–15 }` | **v1.1.** ON_BREAK stays ON_BREAK with a later `breakEndsAt` (capped at session end, BR-2). Re-arms `fb.breakEnd`; resets the BR-3 single repeat | J6, D-018 |
+| `recovery.focusLastTab` | `{}` | **v1.1.** Focuses the last relevant tab if it still exists (FR-R2), else `not_found` | FR-R2 |
+| `notify.test` | `{}` | **v1.1.** Shows one test notification (onboarding/settings). Reply `{ level }` from `getPermissionLevel`; the user's "Did you see it?" answer goes to `prefs.update { notificationsSeen: boolean }`. `false` raises the `notifications_unavailable` notice (FR-I10, SD-9) | FR-I10 |
+| `audio.sample` | `{ tone, volume }` | **v1.1.** SW forwards one `audio.play` to the offscreen document (pages never message it directly) | FR-I9 |
+| `intervention.respond` | `{ interventionId, response: "back" \| "break" \| "mute" \| "stop" \| "continue", muteMinutes?: 15\|60\|-1, breakMinutes?: 1–60 }` | Records the response (`relevant` goes through `session.addRelevant`, v1.1). `stop` is only sent after the UI's inline confirm. `back` focuses the last relevant tab if it still exists (FR-R2). Unknown or stale id → `not_found` | FR-I5 |
 | `mute.set` | `{ minutes: 15 \| 60 \| -1 (rest of session) \| 0 (unmute), alsoPause?: boolean }` | Mute (BR-7). `alsoPause` = the "Mute and pause" composite | FR-I11 |
 | `prefs.get` | `{}` | `{ prefs }` | FR-H1 |
 | `prefs.update` | `{ patch: Partial<Preferences> }` | Validated merge; replies with the effective prefs | FR-H1 |
@@ -77,9 +82,9 @@ Content scripts can't forge `sender.url`: the browser sets it from the frame's c
 2. **Injection call 1:** `executeScript({ target: { tabId, frameIds: [0] }, files: ["overlay.js"] })`. Record `documentId` from the returned `InjectionResult`.
 3. Store `{interventionId, nonce, tabId, documentId, expiresAt = now + 2 min}` in **`storage.session`** (`overlay.pending`; trusted contexts only), not in storage.local.
 4. **Injection call 2:** `executeScript({ target: { tabId, documentIds: [documentId] }, func, args: [{ nonce, interventionId, text, countdownSec }] })`. Targeting the same `documentId` means a navigation between the two calls makes call 2 fail instead of landing in a different document. Both run in the **isolated world** (never `world: "MAIN"`), so the nonce isn't visible to page scripts.
-5. `text` is a generic message-bank phrase ("Time to come back to your task?"). The task label is included only if `prefs.overlay.showTaskLabel` is on (default off), because anything rendered into the page's DOM is visible to the site, even inside a closed shadow root.
+5. `text` is a generic message-bank phrase (`overlay.title.generic`, "Back to your session?"). The task label is included only if `prefs.overlay.showTaskLabel` is on (default off), because anything rendered into the page's DOM is visible to the site, even inside a closed shadow root.
 6. The overlay renders in a closed shadow root. It uses a top-layer `<dialog>`/popover where available (ARCH §13 V8), so page CSS can't easily cover or hide it. It reacts to keys **and clicks** only when `event.isTrusted`. Buttons work immediately, during the countdown.
-7. A response sends `{ type: "overlay.response", nonce, payload: { interventionId, response: "back" | "continue" | "relevant" | "mute" | "stop" | "dismissed" } }`. The SW accepts it only if the nonce matches, hasn't expired, and `sender.tab.id` and `sender.documentId` match. The nonce is single-use.
+7. A response sends `{ type: "overlay.response", nonce, payload: { interventionId, response: "back" | "continue" | "relevant" | "break" | "mute" | "stop" | "dismissed", breakMinutes?: 5 | 10 | 15, muteMinutes?: 15 | 60 | -1 } }` (v1.1 adds `break` and the duration fields; the overlay shows its own chip choosers because a content-script click can't open the side panel). `relevant` here: on a non-mixed host it adds a **host-only, session-only** override. On a mixed-use host the SW adds nothing; it opens `intervention.html#relevant` so the user picks the words there, which completes via `session.addRelevant`. `stop` is sent only after the overlay's own inline confirm. The SW accepts it only if the nonce matches, hasn't expired, and `sender.tab.id` and `sender.documentId` match. The nonce is single-use.
 8. If the page navigates or the tab closes, the intervention counts as `dismissed`. A session ending removes the overlay (`RemoveOverlay`).
 
 **What the nonce does and doesn't protect.** It stops stale or duplicated overlays, and stops responses from the wrong document. It does **not** protect against a fully compromised page renderer, which could also read whatever the overlay renders. That's why the overlay shows generic text by default, and why every response is benign: back, continue, mute, stop and relevant only affect the user's own session. Residual risks: the site can detect that an overlay appeared (fingerprinting a drift moment), and can try to visually obstruct it (SECURITY T17, T18).
@@ -104,6 +109,7 @@ type UiSnapshot = {
     id: string;
     state: "ACTIVE" | "PAUSED" | "ON_BREAK" | "ENDING";
     awaitingContinue: boolean;
+    awaySince?: number;                    // v1.1: start of the absence that caused an auto-pause (for "away for about N min")
     taskLabel: string; objective: string; nextStep?: string;
     plannedMin: number;
     endsAt: number;                        // pages compute remaining time; frozen while PAUSED
@@ -111,12 +117,12 @@ type UiSnapshot = {
     mode: "gentle" | "adaptive" | "strict";
     attention: "ACTIVE_INPUT" | "IDLE" | "LOCKED" | "BROWSER_UNFOCUSED";
     status: "on_task" | "unsure" | "drift_pending" | "drifted" | "recovering" | "excluded";
-    currentContextLabel?: string;          // a host, "Excluded site", "Private window" or "Browser page"; never a title or URL
+    currentContextLabel?: string;          // a host, "Private site", "Private window" or "Browser page"; never a title or URL (v1.1: "Excluded site" renamed)
     mutedUntil?: number;
     pendingIntervention?: { id: string; level: 1 | 2 | 3; message: string; createdAt: number };
     recovery?: { message: string; lastRelevantTabAvailable: boolean };   // message may contain the live title
   };
-  notices: Array<{ code: "notifications_unavailable" | "overlay_permission_missing" | "storage_error" | "prefs_reset" | "safe_mode"; at: number }>;
+  notices: Array<{ code: "notifications_unavailable" | "overlay_permission_missing" | "overlay_unavailable_page" | "storage_error" | "prefs_reset" | "safe_mode"; at: number }>;
   lastSummaryId?: string;
 };
 ```
