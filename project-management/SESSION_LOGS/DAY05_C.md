@@ -41,7 +41,7 @@ After the re-check, the implementer fixed N1, N2, R7 (a) (ban `registerContentSc
 | `npm run ci` (local, Node 26) | **exit 0**: typecheck (src, core, tests), lint, prettier, message lint, manifest (src + dist), secret scan (repo 137, dist 13), **267 tests passed**, core lines 100 % (per file), build 17 files |
 | `npm run e2e:smoke` | `"ok": true`. 0 errors, 0 external requests. CSP, page-fetch, SW-fetch and observer controls all positive |
 | `node tests/e2e/platform/run-platform-facts.mjs` | As in the table above |
-| GitHub Actions | Run #1 on 72caa14 (branch push, before the trigger change): **success**. The final run on `main` is recorded in CURRENT_STATE after the push |
+| GitHub Actions | Run #1 on 72caa14 (branch push, before the trigger change): **success**. Run #2 on `main` at 4f11a58: **success** |
 
 ## Approval
-ADR-0007 **Accepted** (D-019). F-030 DONE once CI on `main` is green.
+ADR-0007 **Accepted** (D-019). F-030 DONE (CI on `main` green, run #2).

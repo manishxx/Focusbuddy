@@ -12,7 +12,7 @@
 | Last test results | Day 05: `npm run ci` exit 0 (267 tests, core 100 % lines); e2e smoke ok; platform facts in ARCHITECTURE §13 (Chrome 157 headless); GitHub Actions: see sync status |
 | Current Git branch | `main` (Day 05 work came from `chore/day-05-scaffold`) |
 | Last successful commit | Day 05 commit, the commit that last changed this file (`git log -1 -- project-management/CURRENT_STATE.md`) |
-| GitHub sync status | `main` and `chore/day-05-scaffold` pushed to `origin`, checked with `git ls-remote` at the end of Day 05. GitHub Actions CI on `main`: see DAY05_C / Day 05 report |
+| GitHub sync status | `main` and `chore/day-05-scaffold` at 4f11a58 on `origin` (checked with `git ls-remote`). **GitHub Actions CI run #2 on `main` (4f11a58): success** (checked via the GitHub API) |
 | Required next action | Owner types `continue` → Day 06 Session A |
 
 ## Environment facts (checked 2026-11-14/15)
