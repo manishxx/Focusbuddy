@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v0.3: independent review (Day 01) applied. Architect baseline approval on Day 03.** |
+| Status | **v1.0: approved baseline (Day 03).** Later changes need a decision-log entry |
 | Owner | Principal Architect (Claude Opus 5.5) |
 | Last updated | 2026-11-15 (Day 01) |
 | Scope | Chrome extension (Manifest V3). Android companion is a separate gated track (§8). |
@@ -168,6 +168,7 @@ Priority: **P0** = needed for the V1 Definition of Done · **P1** = planned for 
 | FR-I8 | Copy is non-judgmental, from a reviewed message bank (no "you failed", "again?!", countdown shaming). | P0 |
 | FR-I9 | Audio: one built-in gentle sound with user-adjustable volume (P0); more sounds (P1). Played through an offscreen document. If playback fails, the visual channel still happens and the failure is logged. | P0 |
 | FR-I10 | If notification permission is denied, or the OS suppresses notifications (Focus/DND, detected via `notifications.getPermissionLevel` where possible), interventions fall back to badge + panel + sound, and the panel tells the user once. | P0 |
+| FR-I12 | "Private notifications" preference: notifications and the overlay show generic text without the task label (lock screen / screen sharing). The overlay defaults to generic text. | P1 |
 | FR-I11 | Global emergency control: a `chrome.commands` keyboard shortcut ("Mute all and pause"), plus a toolbar-action menu item, both working from any tab including `chrome://` pages. Mute lasts for a user-chosen time (15 min / 1 h / rest of session). | P0 |
 
 ### 5.6 Side panel (assistant UI)
@@ -189,7 +190,7 @@ Priority: **P0** = needed for the V1 Definition of Done · **P1** = planned for 
 | ID | Requirement | Pri |
 |---|---|---|
 | FR-H1 | Preferences persist and are validated; invalid stored values fall back to defaults instead of crashing. | P0 |
-| FR-H2 | Two-tier retention. **Raw activity** (titles, paths) is kept only while the session is active and deleted when the summary is built; at most the last relevant title is kept until the summary. **Aggregates** (domains, classes, durations, intervention counts) are kept 30 days by default (user-configurable, 0–90). Pruning runs at session end and on browser start. | P0 |
+| FR-H2 | Two-tier retention. **Tab titles and URL paths are never persisted** (classified in memory only, D-015). **Raw activity** (hosts, classes, timings) is kept only while the session is active and deleted when the summary is built. **Aggregates** (domains, classes, durations, intervention counts) are kept 30 days by default (user-configurable, 0–90). Pruning runs at session end and on browser start. | P0 |
 | FR-H3 | End-of-session summary: planned vs actual time, focused time, objective done (user checkbox), and recoveries framed positively ("You came back 3 times"). Drift-episode detail is collapsed by default. No scores, grades or streak penalties. | P0 |
 | FR-H4 | "Delete all data" (stops any session; clears all stores, caches, alarms and the offscreen document; resets preferences only if the user ticks that box) and per-session delete. | P0 |
 | FR-H6 | "View what's recorded": shows the user exactly which data is currently stored for the active session. | P0 |
@@ -213,7 +214,7 @@ Priority: **P0** = needed for the V1 Definition of Done · **P1** = planned for 
 ### 5.11 Behaviour rules (resolve edge cases)
 | ID | Rule |
 |---|---|
-| BR-1 | Session time is wall-clock time. It **keeps running** while idle, locked or with the browser unfocused. Only PAUSED and ON_BREAK stop the session clock. Idle/locked time is reported separately in the summary. |
+| BR-1 | Session time is wall-clock time. It **keeps running** while idle, locked or with the browser unfocused. Only PAUSED and ON_BREAK stop the session clock. Idle/locked time is reported separately in the summary. **Amended Day 03 (anti-covert-monitoring):** if the screen is locked for > 10 min or idle for > 30 min, the session auto-pauses and resumes only after the user confirms "Continue your session?". |
 | BR-2 | Break length: 1–60 min (presets 5/10/15). A break that would run past the session end is cut short at the session end. |
 | BR-3 | An ignored "break over?" prompt is never escalated. It is repeated at most once, after 5 min, then the session stays ON_BREAK until the user acts or the session ends. |
 | BR-4 | Gentle, Scenario D: no escalation. At most one repeat nudge per drift episode, after the cooldown. |
@@ -305,6 +306,7 @@ Automated timing tests use an injected fake clock. Real-Chrome timing checks all
 | AC-28 | Given a session ends, then raw titles are deleted and only aggregates remain. Aggregates older than the retention period are pruned on browser start. | A |
 | AC-29 | Given only one active session is allowed, when the user starts another, then they're asked to end or keep the current one. Pause, resume, extend and stop all work from the panel and the toolbar action. | A + M |
 | AC-30 | Given the side panel and the intervention page, then an automated axe check reports no WCAG 2.2 AA violations, and a manual screen-reader pass (VoiceOver) can operate every control. | A + M |
+| AC-32 | Given an active session, when the screen is locked for more than 10 min or input is idle for more than 30 min, then the session auto-pauses, and monitoring resumes only after the user confirms. A start notification and badge appear when any session starts. | A + M |
 | AC-31 | Given every message-bank string, then it passes a banned-phrase lint (shaming/guilt list) and has been reviewed. | A |
 
 ---

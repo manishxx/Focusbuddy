@@ -5,7 +5,7 @@ Requirement IDs refer to [docs/PRD.md](../docs/PRD.md). The acceptance criteria 
 
 | Feature | Description | Pri | Reqs / AC | Planned day | Agent | Status | Files | Tests | Review | Deps | Commit |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| F-000 | Product requirements (PRD) | P0 | all | 01 | Architect | REVIEWED | docs/PRD.md | n/a (doc) | Day 01 independent subagent review (APPROVE WITH CHANGES; all 17 findings applied) | — | Day 01 commit |
+| F-000 | Product requirements (PRD) | P0 | all | 01, 03 | Architect | DONE (v1.0 baseline approved Day 03) | docs/PRD.md | n/a (doc) | Day 01 review (17 findings) + Day 03 architect approval | — | Day 03 commit |
 | F-001 | Session lifecycle & state machine | P0 | FR-S1–S6, BR-1–3, AC-02, AC-08, AC-29 | 07 | Tier 2 | NOT_STARTED | — | — | — | F-010 | — |
 | F-002 | Natural-language task parser | P0 | FR-T1–T4, AC-01 | 08 | Tier 2 | NOT_STARTED | — | — | — | F-001 | — |
 | F-003 | Tab/window activity monitor | P0 | FR-M1, M2, M4, M5, M7, M9, AC-17, 18, 20, 21 | 09 | Tier 2 | NOT_STARTED | — | — | — | F-001, threat model | — |
@@ -28,6 +28,9 @@ Requirement IDs refer to [docs/PRD.md](../docs/PRD.md). The acceptance criteria 
 | F-020 | Onboarding & permission explanations | P0 | J1, NFR-6 | 13–20 | Tier 3 + review | NOT_STARTED | — | — | — | F-009 | — |
 | F-021 | Android feasibility study | P1 | FR-D1 | 02 (desk), 22 (gate) | Architect | IN_PROGRESS (desk note done Day 02; gate Day 22) | docs/FEASIBILITY.md §5 | n/a | Day 02 subagent review | OQ-5 device | Day 02 commit |
 | F-023 | Adaptive mode rules | P1 | FR-I4 | 20 | Tier 2 | NOT_STARTED | — | — | — | F-011, F-017 | — |
-| F-024 | Network-silence guarantee (no requests without AI opt-in) | P0 | NFR-5, AC-10 | 14, 21 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |
+| F-024 | Network-silence guarantee (no requests without AI opt-in) | P0 | NFR-5, AC-10, SECURITY §6 CSP | 14, 21 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |
 | F-025 | Browser-unfocused neutral state | P1 | FR-M8 | 09 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |
 | F-022 | Android companion | P2 | FR-D2 | 23–26 (gated) | Tier 2 | NOT_STARTED | — | — | — | F-021 gate | — |
+| F-026 | Architecture set (ARCHITECTURE, API_CONTRACTS, DATA_MODEL, SECURITY, ADR-0001..0006) | P0 | all | 03 | Architect | DONE (approved Day 03) | docs/*.md, docs/DECISIONS/* | n/a (doc) | 2 independent reviews Day 03 (38 findings applied) | F-000 | Day 03 commit |
+| F-027 | Absence auto-pause + session-start indicator (anti-covert-monitoring) | P0 | BR-1 (amended), AC-32, D-016 | 07, 10 | Tier 2 | NOT_STARTED | — | — | — | F-001, F-004 | — |
+| F-028 | Private notifications preference | P1 | FR-I12 | 15, 20 | Tier 3 | NOT_STARTED | — | — | — | F-012 | — |
