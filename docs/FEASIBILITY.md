@@ -85,7 +85,7 @@ Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feas
 | M15 app switch | `WINDOW_ID_NONE` (-1) when Chrome lost OS focus; real window id on return | FR-M8 → **V** on macOS |
 | M9 runtime grant | `permissions.request` from a side-panel button → granted | OQ-1 runtime grant → **V** |
 | M10 overlay | Shown on the page next to the panel (owner). Headful run: Escape, Back to task and Continue anyway each closed it during the countdown | FR-I6 → **V** (display and all three controls) |
-| M7 sound (headful) | 3 beeps played, no errors; audibility awaiting the owner | FR-I9 → Vh until confirmed |
+| M7 sound (headful) | Run 1: 3 beeps reported OK, owner heard **1 of 3** (0.4 s, same pitch, 1 s apart, no fade). Run 2 (`results-sound.json`): owner heard **6 of 6** (0.6 s with fade, rising pitch, 2 s apart), with both a shared AudioContext and a new one per beep | FR-I9 → **V** (audible). Run 1's misses are unexplained: perceptual blending or audio-device warm-up (U). **`ok: true` from the audio API does not prove the user heard it** |
 | M12 idle (headful) | idle→active transition logged | FR-M3 transitions → **V** (partial; idle onset not observed in window) |
 | M14 restart (headful) | Same profile quit and relaunched: storage survived, alarms registered, alarm fired after restart. Extension re-installed by the harness | FR-S5 storage across browser restart → **V**. Alarm persistence across restart → U (confounded by re-install) |
 | M3 / M6 notifications | Created without error (`level: granted`), **but nothing appeared on screen**, for either 2 or 3 buttons | **Confirms SD-9.** `granted` doesn't mean visible. The likely cause is macOS notification settings for Chrome or Focus mode (U). Interventions must never rely on native notifications alone |
@@ -96,7 +96,7 @@ data FR-M6 must exclude or minimise. Account-settings and credentials paths beco
 a fixture class for the Day 11 sensitive-site tests. No titles from the owner's run
 are stored in this repository.
 
-Still outstanding: M2, M4, M5, M7 (audibility), M8, M11, M13, M16–M19.
+Still outstanding: M2, M4, M5, M8, M11, M13, M16–M19; M7 muted-volume case.
 M4/M5/M17 can't be judged until notifications are visible (see M16).
 
 ---
@@ -151,6 +151,7 @@ because it needs Option B.
 | SD-7 | E2E harness: `puppeteer-core` + `enableExtensions` against locally installed Chrome. CI uses Chrome for Testing (decided Day 5). |
 | SD-8 | Android: Option A only, if the Day 22 gate passes **and** a device is confirmed. Expected outcome is at most prototype-only. The desktop back-channel is deferred unless the owner approves a backend. |
 | SD-9 | FR-I10 doesn't rely on `getPermissionLevel` for OS-level suppression. Interventions always use badge + panel as well as the notification. |
+| SD-11 | Alert sounds: tones ≥ 0.5 s with a short fade-in/out, distinct pitches, ≥ 2 s apart when repeated; one shared AudioContext per offscreen document (either works, but shared avoids unbounded contexts). Sound is never the only channel. Day 17 re-tests the first-beep miss. |
 | SD-10 | FR-I11's toolbar-menu item needs the `contextMenus` permission (install warning: none). Added to the Day 3 permission review. |
 
 ## 7. Spike patterns that must NOT carry into production

@@ -87,9 +87,9 @@ const handlers = {
       });
     });
   },
-  async playSound({ volume = 0.3 }) {
+  async playSound({ volume = 0.3, mode = "new", freq = 660 }) {
     await ensureOffscreen();
-    const res = await chrome.runtime.sendMessage({ target: "offscreen", cmd: "beep", volume });
+    const res = await chrome.runtime.sendMessage({ target: "offscreen", cmd: "beep", volume, mode, freq });
     log("sound_result", res || { ok: false, e: "no response" });
     return res;
   },

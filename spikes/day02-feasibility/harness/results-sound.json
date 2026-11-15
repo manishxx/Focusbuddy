@@ -1,0 +1,87 @@
+{
+  "ranAt": "2026-11-15T05:59:33.413Z",
+  "out": {
+    "A_reuse": [
+      {
+        "at": 1794722353076,
+        "ok": true,
+        "mode": "reuse",
+        "freq": 440,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 0,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0,
+        "contextsCreated": 1
+      },
+      {
+        "at": 1794722355237,
+        "ok": true,
+        "mode": "reuse",
+        "freq": 660,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 1.931,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0.016,
+        "contextsCreated": 1
+      },
+      {
+        "at": 1794722357246,
+        "ok": true,
+        "mode": "reuse",
+        "freq": 880,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 3.936,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0.016,
+        "contextsCreated": 1
+      }
+    ],
+    "B_new": [
+      {
+        "at": 1794722363256,
+        "ok": true,
+        "mode": "new",
+        "freq": 440,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 0,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0,
+        "contextsCreated": 2
+      },
+      {
+        "at": 1794722365269,
+        "ok": true,
+        "mode": "new",
+        "freq": 660,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 0,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0,
+        "contextsCreated": 3
+      },
+      {
+        "at": 1794722367274,
+        "ok": true,
+        "mode": "new",
+        "freq": 880,
+        "stateBefore": "running",
+        "state": "running",
+        "currentTime": 0,
+        "sampleRate": 48000,
+        "baseLatency": 0.005333333333333333,
+        "outputLatency": 0,
+        "contextsCreated": 4
+      }
+    ]
+  }
+}
