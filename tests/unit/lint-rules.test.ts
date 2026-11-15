@@ -24,10 +24,13 @@ beforeAll(() => {
               "vitest.config.ts",
               "src/*/__lint_probe__.ts",
               "src/*/__lint_probe__.tsx",
+              "src/*/__lint_probe__.d.ts",
               "src/*/*/__lint_probe__.ts",
               "src/ui/*/__lint_probe__.tsx",
             ],
             defaultProject: "tsconfig.json",
+            // Every probe path counts as a default-project file; there are more than 8.
+            maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 64,
           },
         },
       },
@@ -47,6 +50,9 @@ const UI = "src/ui/sidepanel/__lint_probe__.tsx";
 const OFFSCREEN = "src/offscreen/__lint_probe__.ts";
 const CORE_TSX = "src/core/__lint_probe__.tsx";
 const LIB = "src/lib/__lint_probe__.ts";
+const SHELL_DTS = "src/shell/__lint_probe__.d.ts";
+const CORE_DTS = "src/core/__lint_probe__.d.ts";
+const CONTENT_DTS = "src/content/__lint_probe__.d.ts";
 
 type Case = [name: string, file: string, code: string, rule: string];
 
@@ -395,6 +401,106 @@ const BAD: Case[] = [
   ["@ts-ignore banned", SHELL, `// @ts-ignore\nexport const f: number = "x";`, "@typescript-eslint/ban-ts-comment"],
   ["as any banned", SHELL, `export const f = (x: unknown) => x as any;`, "@typescript-eslint/no-explicit-any"],
   ["core .tsx banned", CORE_TSX, `export const a = 1;`, "no-restricted-syntax"],
+  // ---- Day 05 re-review ----
+  // N1: ambient declarations shadowing banned globals
+  [
+    "declare const fetch",
+    SHELL,
+    `declare const fetch: (u: string) => Promise<unknown>;\nexport const f = () => fetch("https://evil.example");`,
+    "no-restricted-syntax",
+  ],
+  [
+    "declare const XMLHttpRequest",
+    UI,
+    `declare const XMLHttpRequest: new () => object;\nexport const f = () => new XMLHttpRequest();`,
+    "no-restricted-syntax",
+  ],
+  [
+    "declare const chrome in core",
+    CORE,
+    `declare const chrome: { tabs: { query(q: object): void } };\nexport const f = () => chrome.tabs.query({});`,
+    "no-restricted-syntax",
+  ],
+  [
+    "declare function",
+    SHELL,
+    `declare function fetch(u: string): Promise<unknown>;\nexport const f = () => fetch("https://evil.example");`,
+    "no-restricted-syntax",
+  ],
+  [
+    "declare global",
+    SHELL,
+    `declare global {\n  const sneaky: (u: string) => void;\n}\nexport {};`,
+    "no-restricted-syntax",
+  ],
+  [
+    "declare module",
+    SHELL,
+    `declare module "evil" {\n  export const x: number;\n}\nexport {};`,
+    "no-restricted-syntax",
+  ],
+  ["declare class", SHELL, `declare class WebSocket2 {}\nexport const w = WebSocket2;`, "no-restricted-syntax"],
+  ["namespace", SHELL, `namespace N {\n  export const x = 1;\n}\nexport const y = N.x;`, "no-restricted-syntax"],
+  [".d.ts in core", CORE_DTS, `export interface A { a: number }`, "no-restricted-syntax"],
+  [".d.ts in content", CONTENT_DTS, `export interface A { a: number }`, "no-restricted-syntax"],
+  // R7 (a): registered content scripts
+  [
+    "registerContentScripts",
+    SHELL,
+    `export const f = () => chrome.scripting.registerContentScripts([{ id: "x", js: ["overlay.js"], matches: ["https://*/*"] }]);`,
+    "no-restricted-syntax",
+  ],
+  [
+    "updateContentScripts",
+    SHELL,
+    `export const f = () => chrome.scripting.updateContentScripts([{ id: "x", js: ["overlay.js"] }]);`,
+    "no-restricted-syntax",
+  ],
+  // extras
+  ["storage.sync", SHELL, `export const f = () => chrome.storage.sync.set({ a: 1 });`, "no-restricted-syntax"],
+  [
+    "JSX src={'https://...'}",
+    UI,
+    `export const C = () => <img src={"https://x.example/a.png"} alt="" />;`,
+    "no-restricted-syntax",
+  ],
+  [
+    "JSX src={`https://...`}",
+    UI,
+    'export const C = () => <img src={`https://x.example/${1}.png`} alt="" />;',
+    "no-restricted-syntax",
+  ],
+  ["JSX protocol-relative href", UI, `export const C = () => <a href="//x.example">x</a>;`, "no-restricted-syntax"],
+  [
+    "JSX srcSet remote",
+    UI,
+    `export const C = () => <img srcSet="https://x.example/a.png 2x" alt="" />;`,
+    "no-restricted-syntax",
+  ],
+  [
+    "JSX ping remote",
+    UI,
+    `export const C = () => <a href="#a" ping="https://x.example/p">x</a>;`,
+    "no-restricted-syntax",
+  ],
+  [
+    "JSX poster remote",
+    UI,
+    `export const C = () => <video poster={"https://x.example/p.png"} />;`,
+    "no-restricted-syntax",
+  ],
+  [
+    "JSX formAction remote",
+    UI,
+    `export const C = () => <button formAction="https://x.example/f">x</button>;`,
+    "no-restricted-syntax",
+  ],
+  [
+    "JSX action remote",
+    UI,
+    `export const C = () => <form action={\`https://x.example/f\`} />;`,
+    "no-restricted-syntax",
+  ],
 ];
 
 const GOOD: [name: string, file: string, code: string][] = [
@@ -433,6 +539,31 @@ const GOOD: [name: string, file: string, code: string][] = [
       `export const at = (xs: number[], i: number) => xs[i + 1];`,
     ].join("\n"),
   ],
+  // N2: chrome in type positions is not runtime access
+  ["type chrome.tabs.Tab", SHELL, `export const title = (t: chrome.tabs.Tab): string => t.title ?? "";`],
+  [
+    "type chrome.runtime.MessageSender",
+    OFFSCREEN,
+    `export const fromSw = (s: chrome.runtime.MessageSender): boolean => s.tab === undefined;`,
+  ],
+  [
+    "type chrome.storage.StorageChange",
+    SHELL,
+    `export const changed = (c: chrome.storage.StorageChange): boolean => c.newValue !== c.oldValue;`,
+  ],
+  ["type alias = chrome.tabs.Tab", SHELL, `export type Tab = chrome.tabs.Tab;`],
+  ["ReturnType<typeof chrome.tabs.get>", SHELL, `export type GetResult = ReturnType<typeof chrome.tabs.get>;`],
+  [
+    "generic with chrome type",
+    SHELL,
+    `export const ids = (tabs: Array<chrome.tabs.Tab>): number[] => tabs.flatMap((t) => (t.id === undefined ? [] : [t.id]));`,
+  ],
+  [
+    "ambient declarations in a shell .d.ts",
+    SHELL_DTS,
+    `declare const BUILD_ID: string;\ninterface Window { fb?: never }`,
+  ],
+  ["JSX extension-relative src", UI, `export const C = () => <img src="icons/icon16.png" alt="" />;`],
   [
     "ui builds DOM safely",
     UI,

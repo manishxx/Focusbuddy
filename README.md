@@ -5,8 +5,8 @@ executive function to start tasks, notice when they drift, and get back to them.
 It is a Chrome extension (Manifest V3). It works offline, keeps data on your device,
 and uses AI only if you turn it on.
 
-> **Status:** Day 1 of a 30-day V1 programme: requirements only. There's no
-> installable build yet. See [project-management/CURRENT_STATE.md](project-management/CURRENT_STATE.md).
+> **Status:** Day 5 of a 30-day V1 programme: design approved and the code scaffold is in place.
+> No features work yet, so there's nothing useful to install. See [project-management/CURRENT_STATE.md](project-management/CURRENT_STATE.md).
 
 Focus Buddy is not a medical device and does not diagnose or treat ADHD.
 

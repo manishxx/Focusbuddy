@@ -2,7 +2,15 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { ALLOW_MARKER, MAX_BYTES, checkPath, decode, scanFiles, scanText } from "../../scripts/check-secrets.mjs";
+import {
+  ALLOW_MARKER,
+  MAX_BYTES,
+  checkPath,
+  decode,
+  isPlaceholder,
+  scanFiles,
+  scanText,
+} from "../../scripts/check-secrets.mjs";
 
 // Fake secrets are assembled at run time so this file itself never matches.
 const j = (...parts: string[]) => parts.join("");
@@ -52,6 +60,32 @@ describe("scanText avoids false positives", () => {
     expect(scanText("x", j("ok\n", "gh", "p_", "a".repeat(36)))).toEqual([
       { path: "x", line: 2, rule: "github-token" },
     ]);
+  });
+});
+
+describe("placeholders", () => {
+  it.each([
+    j("gh", "p_", "x".repeat(36)),
+    j("gh", "p_", "X".repeat(40)),
+    j("gh", "p_", "0".repeat(36)),
+    j("github_", "pat_", "x".repeat(30)),
+    j("s", "k-", "X".repeat(30)),
+    j("np", "m_", "x".repeat(36)),
+    j("AK", "IA", "X".repeat(16)),
+  ])("ignores %s", (token) => {
+    expect(isPlaceholder(token)).toBe(true);
+    expect(rulesFor(`token: ${token}`)).toEqual([]);
+  });
+
+  it("still flags a real-looking token next to a placeholder", () => {
+    const fake = j("gh", "p_", "x".repeat(36));
+    const real = j("gh", "p_", "a1B2".repeat(9));
+    expect(isPlaceholder(real)).toBe(false);
+    expect(rulesFor(`${fake} ${real}`)).toEqual(["github-token"]);
+  });
+
+  it("does not treat mixed x and letters as a placeholder", () => {
+    expect(isPlaceholder(j("gh", "p_", "xxxxa".repeat(8)))).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@ import path from "node:path";
 
 const ROOT_GLOBAL = "chrome";
 const BIND_LIKE = new Set(["call", "apply", "bind"]);
+const TYPE_PARENTS = new Set(["TSQualifiedName", "TSTypeReference", "TSTypeQuery", "TSImportType", "TSTypeOperator"]);
 
 /** Unwrap TS-only wrappers that don't change the runtime value. */
 function unwrap(node) {
@@ -61,6 +62,8 @@ const chromeAccess = {
       "Program:exit"(program) {
         for (const id of globalRefs(context, program, ROOT_GLOBAL)) {
           if (id.parent?.type === "UnaryExpression" && id.parent.operator === "typeof") continue;
+          // Type positions (chrome.tabs.Tab, typeof chrome.tabs.get in a type) are not runtime access.
+          if (TYPE_PARENTS.has(id.parent?.type)) continue;
           // Walk up the member chain.
           let node = id;
           const names = [];

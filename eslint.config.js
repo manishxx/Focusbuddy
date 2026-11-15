@@ -40,6 +40,8 @@ const SRC_PROPERTIES = [
 
 const GLOBALISH = "/^(globalThis|self|window|global|chrome|navigator|document|location|top|parent|frames|opener)$/";
 const REMOTE = "/^([a-zA-Z][a-zA-Z0-9+.-]*:|\\/\\/)/";
+const URL_ATTRS =
+  "/^(href|src|srcSet|action|formAction|poster|data|ping|cite|background|xlinkHref|codebase|manifest)$/";
 const RISKY_ELEMENTS = "/^(script|iframe|frame|frameset|link|object|embed|base|meta|portal|fencedframe)$/i";
 
 const SRC_SYNTAX = [
@@ -123,10 +125,33 @@ const SRC_SYNTAX = [
     message: "No uninstall URL (NFR-5): it would open a remote page.",
   },
   {
-    selector: `JSXAttribute[name.name=/^(href|src|action|formAction|poster|data)$/][value.type='Literal'][value.value=${REMOTE}]`,
+    selector: [
+      `JSXAttribute[name.name=${URL_ATTRS}][value.type='Literal'][value.value=${REMOTE}]`,
+      `JSXAttribute[name.name=${URL_ATTRS}][value.expression.type='Literal'][value.expression.value=${REMOTE}]`,
+      `JSXAttribute[name.name=${URL_ATTRS}][value.expression.type='TemplateLiteral'][value.expression.quasis.0.value.raw=${REMOTE}]`,
+    ].join(", "),
     message: "No remote or scheme URLs in JSX attributes (SECURITY §6, NFR-5).",
   },
+  {
+    selector: "MemberExpression[property.name=/^(registerContentScripts|updateContentScripts)$/]",
+    message:
+      "No registered content scripts (API_CONTRACTS §4): they persist and can run before the SW hardens storage. Inject on demand via the overlay adapter.",
+  },
+  {
+    selector: "MemberExpression[property.name='sync'][object.property.name='storage']",
+    message: "Never chrome.storage.sync (SECURITY §3): data stays on this computer.",
+  },
 ];
+// Ambient declarations can shadow a banned global (`declare const fetch: …`) and pass
+// both lint and tsc. Allowed only in .d.ts files, which are banned in core and content.
+const DECL_SYNTAX = [
+  {
+    selector:
+      "VariableDeclaration[declare=true], TSDeclareFunction, ClassDeclaration[declare=true], TSEnumDeclaration[declare=true], TSModuleDeclaration",
+    message: "No ambient declarations (declare const/function/class/module/global, namespaces) in src source files.",
+  },
+];
+const DTS_BAN = [{ selector: "Program", message: "No .d.ts files in src/core or src/content." }];
 const UI_SYNTAX = [
   {
     selector:
@@ -221,7 +246,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": ["error", ...SRC_GLOBALS],
       "no-restricted-properties": ["error", ...SRC_PROPERTIES],
-      "no-restricted-syntax": ["error", ...SRC_SYNTAX],
+      "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...DECL_SYNTAX],
       "no-eval": ["error", { allowIndirect: false }],
       "no-new-func": "error",
       "no-implied-eval": "off",
@@ -245,13 +270,26 @@ export default tseslint.config(
   },
   {
     files: ["src/core/**/*.tsx"],
-    rules: { "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...CORE_TSX] },
+    rules: { "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...DECL_SYNTAX, ...CORE_TSX] },
   },
   // ---- src/ui: additionally no runtime.onMessage / onConnect. ----
   {
     files: ["src/ui/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...UI_SYNTAX],
+      "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...DECL_SYNTAX, ...UI_SYNTAX],
     },
+  },
+  // ---- .d.ts files: ambient declarations allowed, but not in core or content. ----
+  {
+    files: ["src/**/*.d.ts"],
+    rules: { "no-restricted-syntax": ["error", ...SRC_SYNTAX] },
+  },
+  {
+    files: ["src/ui/**/*.d.ts"],
+    rules: { "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...UI_SYNTAX] },
+  },
+  {
+    files: ["src/core/**/*.d.ts", "src/content/**/*.d.ts"],
+    rules: { "no-restricted-syntax": ["error", ...SRC_SYNTAX, ...DTS_BAN] },
   },
 );

@@ -14,3 +14,4 @@ export function decode(buf: Buffer): string | null;
 export function scanFiles(paths: string[], base?: string): { findings: Finding[]; scanned: number };
 export function gitFiles(): string[];
 export function dirFiles(dir: string): string[];
+export function isPlaceholder(token: string): boolean;

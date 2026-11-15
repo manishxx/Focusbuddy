@@ -15,6 +15,16 @@ export interface HardeningApi {
 
 export const DIAG_KEY = "diag.startupErrors";
 
+export const ACCESS_LEVEL_ERROR = "E_STORAGE_ACCESS_LEVEL";
+
+/**
+ * True only if storage.local was restricted to trusted contexts, i.e. harden()
+ * reported no E_STORAGE_ACCESS_LEVEL error. Injection must wait for this.
+ */
+export function isHardened(errors: readonly string[]): boolean {
+  return !errors.some((e) => e === ACCESS_LEVEL_ERROR || e.startsWith(`${ACCESS_LEVEL_ERROR}:`));
+}
+
 /** Diagnostic codes only (never user data), e.g. "E_STORAGE_ACCESS_LEVEL:TypeError". */
 export async function harden(api: HardeningApi, reason: string): Promise<string[]> {
   const errors: string[] = [];
@@ -26,7 +36,7 @@ export async function harden(api: HardeningApi, reason: string): Promise<string[
     }
   };
   // SECURITY §7: content scripts must not read chrome.storage.local.
-  await attempt("E_STORAGE_ACCESS_LEVEL", () => api.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }));
+  await attempt(ACCESS_LEVEL_ERROR, () => api.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }));
   await attempt("E_SIDE_PANEL_BEHAVIOR", () => api.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }));
   if (errors.length > 0) {
     for (const e of errors) console.warn(`[focus-buddy] ${reason} ${e}`);

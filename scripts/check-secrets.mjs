@@ -48,6 +48,16 @@ const ENV_ALLOWED = /(^|\/)\.env\.example$/;
 const SECRET_FILE =
   /(^|\/)(id_rsa[^/]*|id_dsa[^/]*|id_ecdsa[^/]*|id_ed25519[^/]*|[^/]+\.(pem|key|p12|pfx|crx|keystore|jks))$/i;
 
+// Known token prefixes; what follows them in an obvious placeholder is only x, X, 0 or *.
+const TOKEN_PREFIX =
+  /^(gh[pousr]_|github_pat_|sk-ant-|sk-proj-|sk-|[rs]k_(?:test|live)_|AKIA|ASIA|xox[abposr]-|AIza|GOCSPX-|npm_)/;
+
+/** True for obvious documentation placeholders such as ghp_xxxxxxxx… or sk-XXXX…. */
+export function isPlaceholder(token) {
+  const m = TOKEN_PREFIX.exec(token);
+  return !!m && /^[xX0*_-]+$/.test(token.slice(m[0].length));
+}
+
 function stripExamples(line) {
   let out = line;
   for (const ex of DOCUMENTED_EXAMPLES) out = out.split(ex).join(" ");
@@ -60,9 +70,12 @@ export function scanText(path, text) {
   text.split(/\r?\n/).forEach((raw, i) => {
     if (raw.includes(ALLOW_MARKER)) return;
     const line = stripExamples(raw);
-    for (const rule of RULES)
-      if (rule.re.test(line) && (!rule.lineAlso || rule.lineAlso.test(line)))
+    for (const rule of RULES) {
+      if (rule.lineAlso && !rule.lineAlso.test(line)) continue;
+      const all = new RegExp(rule.re.source, rule.re.flags.includes("g") ? rule.re.flags : rule.re.flags + "g");
+      if ([...line.matchAll(all)].some((m) => !isPlaceholder(m[0])))
         findings.push({ path, line: i + 1, rule: rule.id });
+    }
   });
   return findings;
 }

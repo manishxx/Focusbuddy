@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DIAG_KEY, harden, type HardeningApi } from "../../src/shell/hardening";
+import { ACCESS_LEVEL_ERROR, DIAG_KEY, harden, isHardened, type HardeningApi } from "../../src/shell/hardening";
 
 function fakeApi(fail: { access?: boolean; panel?: boolean; session?: boolean } = {}) {
   const calls: string[] = [];
@@ -56,6 +56,17 @@ describe("harden", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { api } = fakeApi({ access: true, session: true });
     await expect(harden(api, "evaluate")).resolves.toEqual(["E_STORAGE_ACCESS_LEVEL:TypeError"]);
+    warn.mockRestore();
+  });
+
+  it("isHardened is true only without an access-level error", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(isHardened(await harden(fakeApi().api, "evaluate"))).toBe(true);
+    expect(isHardened(await harden(fakeApi({ panel: true }).api, "evaluate"))).toBe(true);
+    expect(isHardened(await harden(fakeApi({ access: true }).api, "evaluate"))).toBe(false);
+    expect(isHardened(await harden(fakeApi({ access: true, session: true }).api, "evaluate"))).toBe(false);
+    expect(isHardened([ACCESS_LEVEL_ERROR])).toBe(false);
+    expect(isHardened([])).toBe(true);
     warn.mockRestore();
   });
 });

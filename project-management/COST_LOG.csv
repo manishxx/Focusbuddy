@@ -18,3 +18,10 @@ Date,Development day,Agent,Model,Task,Input tokens,Output tokens,Estimated cost,
 2026-11-15,4,Prototype implementer (subagent),opus (exact version unknown),Day 4 Session C prototype fixes,unknown,unknown,unknown,unknown,"Completed; 249999 tokens reported by harness (cumulative or not: unknown)"
 2026-11-15,4,UX/a11y reviewer (subagent),opus (exact version unknown),Day 4 Session C re-check of fixes,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES (21/23 fixed, 4 new; all resolved after); 232314 tokens reported by harness (cumulative or not: unknown)"
 2026-11-15,4,Orchestrator,claude-opus-5-5,Day 4 Session C fixes approvals logs commit,unknown,unknown,unknown,unknown,Completed
+2026-11-15,5,Orchestrator,claude-opus-5-5,Day 5 Session A ADR-0007 + platform probe,unknown,unknown,unknown,unknown,Completed
+2026-11-15,5,Scaffold implementer (subagent),opus (exact version unknown),Day 5 Session B scaffold,unknown,unknown,unknown,unknown,"Completed; 134053 total tokens reported by harness"
+2026-11-15,5,Scaffold reviewer (subagent),opus (exact version unknown),Day 5 Session C independent review,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES; 150397 tokens reported by harness"
+2026-11-15,5,Scaffold implementer (subagent),opus (exact version unknown),Day 5 Session C fix round 1,unknown,unknown,unknown,unknown,"Completed; 230337 tokens reported (cumulative or not: unknown)"
+2026-11-15,5,Scaffold reviewer (subagent),opus (exact version unknown),Day 5 Session C re-check,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES; 202748 tokens reported (cumulative or not: unknown)"
+2026-11-15,5,Scaffold implementer (subagent),opus (exact version unknown),Day 5 Session C fix round 2,unknown,unknown,unknown,unknown,"Completed; 248041 tokens reported (cumulative or not: unknown)"
+2026-11-15,5,Orchestrator,claude-opus-5-5,Day 5 Session C verification logs commit,unknown,unknown,unknown,unknown,Completed

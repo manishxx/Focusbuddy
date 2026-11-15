@@ -3,7 +3,7 @@
  * synchronously at the top level so Chrome can wake the worker for them.
  * Day 05 scaffold: no tab, idle or alarm handling yet.
  */
-import { harden, type HardeningApi } from "./hardening";
+import { harden, isHardened, type HardeningApi } from "./hardening";
 
 // Explicit wrappers: chrome APIs are only ever called directly (lint rule fb/chrome-access).
 const api: HardeningApi = {
@@ -17,6 +17,17 @@ const api: HardeningApi = {
 // Runs on every evaluation of the worker: first install, browser start, and every
 // wake-up after the worker was stopped (the access level is not persisted).
 const ready: Promise<string[]> = harden(api, "evaluate");
+
+/**
+ * Resolves true only when storage.local is restricted to trusted contexts for this
+ * worker evaluation. RULE: every future injection into a web page (the Strict overlay
+ * via chrome.scripting.executeScript) must go through ONE adapter that awaits
+ * `readyHardened` and refuses to inject when it is false; otherwise a content script
+ * could read chrome.storage.local before the access level is applied. That adapter
+ * arrives on Day 09 (ARCHITECTURE §3 shell/adapters/overlay). Registered content
+ * scripts are banned by lint for the same reason.
+ */
+export const readyHardened: Promise<boolean> = ready.then(isHardened);
 
 chrome.runtime.onInstalled.addListener(() => {
   // Opens nothing on install yet (onboarding arrives later). Re-applying is
