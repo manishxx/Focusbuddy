@@ -76,7 +76,7 @@ wake) is feasible. Browser-restart persistence is pending manual check M14.
 extension worker. Use `ServiceWorker.stopAllWorkers` in Day 5+ restart tests.
 
 ## 4. Manual verification (owner)
-Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feasibility/MANUAL_CHECKLIST.md). **Status: partially run by the owner (2026-11-16), real Chrome on macOS. 6 of 19 items reported.**
+Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feasibility/MANUAL_CHECKLIST.md). **Status: partially run (2026-11-16): 6 items by the owner in real Chrome, plus 4 by headful automation in a throwaway profile (`harness/t-headful.mjs`, `results-headful.json`).** Claude in Chrome was not connected, and computer use is read-only for browsers, so the owner's own Chrome couldn't be driven.
 
 | Item | Result | Effect |
 |---|---|---|
@@ -84,7 +84,10 @@ Checklist: [`spikes/day02-feasibility/MANUAL_CHECKLIST.md`](../spikes/day02-feas
 | 30 s alarm (seen during M1) | `tick` every 30 s in the log | Row 6 → **V** in real Chrome 157 |
 | M15 app switch | `WINDOW_ID_NONE` (-1) when Chrome lost OS focus; real window id on return | FR-M8 → **V** on macOS |
 | M9 runtime grant | `permissions.request` from a side-panel button → granted | OQ-1 runtime grant → **V** |
-| M10 overlay | Shown on the page next to the panel; countdown reached 0 | FR-I6 → **V** for display. Escape/buttons in real Chrome not reported yet |
+| M10 overlay | Shown on the page next to the panel (owner). Headful run: Escape, Back to task and Continue anyway each closed it during the countdown | FR-I6 → **V** (display and all three controls) |
+| M7 sound (headful) | 3 beeps played, no errors; audibility awaiting the owner | FR-I9 → Vh until confirmed |
+| M12 idle (headful) | idle→active transition logged | FR-M3 transitions → **V** (partial; idle onset not observed in window) |
+| M14 restart (headful) | Same profile quit and relaunched: storage survived, alarms registered, alarm fired after restart. Extension re-installed by the harness | FR-S5 storage across browser restart → **V**. Alarm persistence across restart → U (confounded by re-install) |
 | M3 / M6 notifications | Created without error (`level: granted`), **but nothing appeared on screen**, for either 2 or 3 buttons | **Confirms SD-9.** `granted` doesn't mean visible. The likely cause is macOS notification settings for Chrome or Focus mode (U). Interventions must never rely on native notifications alone |
 
 **Privacy observation:** the real-browsing log captured a GitHub account-settings
@@ -93,7 +96,7 @@ data FR-M6 must exclude or minimise. Account-settings and credentials paths beco
 a fixture class for the Day 11 sensitive-site tests. No titles from the owner's run
 are stored in this repository.
 
-Still outstanding: M2, M4, M5, M7, M8, M11–M14, M16–M19, and Escape/buttons for M10.
+Still outstanding: M2, M4, M5, M7 (audibility), M8, M11, M13, M16–M19.
 M4/M5/M17 can't be judged until notifications are visible (see M16).
 
 ---

@@ -1,0 +1,75 @@
+{
+  "ranAt": "2026-11-15T05:53:16.871Z",
+  "out": {
+    "M10_escape": {
+      "shown": true,
+      "closed_during_countdown": true
+    },
+    "M10_back_button": {
+      "shown": true,
+      "closed_during_countdown": true
+    },
+    "M10_continue_button": {
+      "shown": true,
+      "closed_during_countdown": true
+    },
+    "M10_overlay_events": [
+      "shown",
+      "escape",
+      "shown",
+      "back",
+      "shown",
+      "continue"
+    ],
+    "M7_sound_results": [
+      {
+        "ok": true,
+        "state": "running",
+        "volume": 0.5
+      },
+      {
+        "ok": true,
+        "state": "running",
+        "volume": 0.5
+      },
+      {
+        "ok": true,
+        "state": "running",
+        "volume": 0.5
+      }
+    ],
+    "M12_idle_events": [
+      {
+        "atS": 43,
+        "state": "active"
+      }
+    ],
+    "M14_before_quit": {
+      "entries": 24,
+      "sw_starts": 1,
+      "alarms": [
+        "tick",
+        "persist-probe"
+      ]
+    },
+    "M14_after_restart": {
+      "same_extension_id": true,
+      "entries": 31,
+      "sw_starts": 2,
+      "alarms_registered": [
+        {
+          "name": "tick",
+          "persist": true
+        },
+        {
+          "name": "persist-probe",
+          "persist": true
+        }
+      ],
+      "alarms_after_restart_s": [
+        102
+      ],
+      "reinstalled_event": 2
+    }
+  }
+}
