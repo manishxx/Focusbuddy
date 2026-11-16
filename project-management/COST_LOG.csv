@@ -25,3 +25,8 @@ Date,Development day,Agent,Model,Task,Input tokens,Output tokens,Estimated cost,
 2026-11-15,5,Scaffold reviewer (subagent),opus (exact version unknown),Day 5 Session C re-check,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES; 202748 tokens reported (cumulative or not: unknown)"
 2026-11-15,5,Scaffold implementer (subagent),opus (exact version unknown),Day 5 Session C fix round 2,unknown,unknown,unknown,unknown,"Completed; 248041 tokens reported (cumulative or not: unknown)"
 2026-11-15,5,Orchestrator,claude-opus-5-5,Day 5 Session C verification logs commit,unknown,unknown,unknown,unknown,Completed
+2026-11-16,6,Orchestrator,claude-opus-5-5,Day 6 Session A storage design + decisions,unknown,unknown,unknown,unknown,Completed
+2026-11-16,6,Storage implementer (subagent),opus (exact version unknown),Day 6 Session B storage layer (2 runs),unknown,unknown,unknown,unknown,"Completed; 215590 and 231147 tokens reported (cumulative or not: unknown)"
+2026-11-16,6,Storage reviewer (subagent),opus (exact version unknown),Day 6 Session C review + re-check,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES twice; 141566 and 179251 tokens reported (cumulative or not: unknown)"
+2026-11-16,6,Storage implementer (subagent),opus (exact version unknown),Day 6 Session C fix rounds (2),unknown,unknown,unknown,unknown,"Completed; 297090 and 316023 tokens reported (cumulative or not: unknown)"
+2026-11-16,6,Orchestrator,claude-opus-5-5,Day 6 Session C probe verification logs commit,unknown,unknown,unknown,unknown,Completed

@@ -7,7 +7,9 @@ export interface JsonKv extends KvArea {
   raw(key: string): string | undefined;
 }
 
-export function jsonKv(initial: Record<string, unknown> = {}): JsonKv {
+let counter = 0;
+
+export function jsonKv(initial: Record<string, unknown> = {}, name = `json-${++counter}`): JsonKv {
   const data = new Map<string, string>();
   for (const [k, v] of Object.entries(initial)) data.set(k, JSON.stringify(v));
   const read = (key: string): unknown => {
@@ -15,6 +17,7 @@ export function jsonKv(initial: Record<string, unknown> = {}): JsonKv {
     return text === undefined ? undefined : (JSON.parse(text) as unknown);
   };
   return {
+    name,
     get: (key) => Promise.resolve(read(key)),
     set: (key, value) => {
       const text = JSON.stringify(value);

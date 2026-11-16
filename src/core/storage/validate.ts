@@ -185,10 +185,13 @@ export const FORBIDDEN_MAP_KEYS: readonly string[] = ["__proto__", "constructor"
 
 /**
  * Override.titleSubstring is a plain word or phrase (review F12): no URL pieces
- * (`://`, `/`, `?`, `#`, `@`) and no control characters.
+ * (`://`, `/`, `?`, `#`, `@`), no control characters, no format characters (\p{Cf})
+ * and no line or paragraph separators (\p{Zl}, \p{Zp}).
  */
 export function isSafeTitleSubstring(v: string): boolean {
   if (/[/?#@]/.test(v)) return false;
+  // Invisible format characters (e.g. U+200B, U+202E) and line/paragraph separators (N3).
+  if (/[\p{Cf}\p{Zl}\p{Zp}]/u.test(v)) return false;
   for (let i = 0; i < v.length; i++) {
     const code = v.charCodeAt(i);
     if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return false;

@@ -234,8 +234,8 @@ The result lists any step that failed. Note for users: notifications already del
 | quietHours | `start` ≠ `end` |
 | ActiveState time | `lastSeenAt` ≥ `session.startedAt` |
 | Validation input | Every validator first takes a pure plain-data snapshot. Accessor properties (getters), Proxies, non-plain prototypes, symbols, functions, cycles and sparse arrays are rejected, so the value validated is exactly the value written (Day 06 review F1, F2) |
-| Concurrency | Repositories serialise read-modify-write per storage key, so concurrent calls can't lose updates, even though the engine is also a serialised single writer (Day 06 review F3) |
-| `titleSubstring` | Also rejects `://`, `/`, `?`, `#`, `@` and control characters: words, not URL fragments (Day 06 review F12) |
+| Concurrency | Repositories serialise read-modify-write per storage key (locks keyed by area **name**), so concurrent calls can't lose updates (Day 06 review F3, N2). `deleteAll` takes the whole area exclusively and bumps an epoch. Any write queued or in flight from before the delete is refused with `E_STORAGE_DELETED`, so deleted data can't reappear (N1). Callers treat that code as "data was deleted". Never request the same key inside its own lock (it deadlocks) (N4) |
+| `titleSubstring` | Also rejects `/`, `?`, `#`, `@`, control characters and Unicode format/separator characters (`\p{Cf}`, `\p{Zl}`, `\p{Zp}`, e.g. bidi overrides): words, not URL fragments or spoofing (Day 06 review F12, N3) |
 
 ## 9. Deferred: device association (Android)
 

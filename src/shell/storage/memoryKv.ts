@@ -9,10 +9,14 @@ export interface MemoryKv extends KvArea {
   keys(): string[];
 }
 
-export function memoryKv(initial: Record<string, unknown> = {}): MemoryKv {
+let counter = 0;
+
+/** `name` defaults to a fresh unique name; pass the same name to model one shared backend. */
+export function memoryKv(initial: Record<string, unknown> = {}, name = `memory-${++counter}`): MemoryKv {
   const data = new Map<string, unknown>();
   for (const [k, v] of Object.entries(initial)) data.set(k, structuredClone(v));
   return {
+    name,
     get: (key) => Promise.resolve(data.has(key) ? structuredClone(data.get(key)) : undefined),
     set: (key, value) => {
       data.set(key, structuredClone(value));

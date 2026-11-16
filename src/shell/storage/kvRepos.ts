@@ -56,18 +56,18 @@ export function diagRepo(local: KvArea, now: () => number): DiagRepo {
   };
   const appendMany = async (codes: readonly string[]): Promise<void> => {
     if (codes.length === 0) return;
-    await withKeyLock(local, KEY_DIAG, async () => {
+    await withKeyLock(local, KEY_DIAG, async (w) => {
       let log = await list();
       const at = now();
       for (const code of codes) log = appendDiag(log, { at, code });
-      await local.set(KEY_DIAG, log);
+      await w.set(log);
     });
   };
   return {
     list,
     append: (code) => appendMany([code]),
     appendMany,
-    clear: () => withKeyLock(local, KEY_DIAG, () => local.remove(KEY_DIAG)),
+    clear: () => withKeyLock(local, KEY_DIAG, (w) => w.remove()),
   };
 }
 
@@ -100,10 +100,10 @@ export function prefsRepo(local: KvArea): PrefsRepo {
   const get = async (): Promise<{ prefs: Preferences; resetFields: string[] }> =>
     parsePreferences(await local.get(KEY_PREFS));
   const put = (prefs: unknown): Promise<WriteResult> =>
-    withKeyLock(local, KEY_PREFS, async () => {
+    withKeyLock(local, KEY_PREFS, async (w) => {
       const r = validatePreferences(prefs);
       if (!r.ok) return r;
-      await local.set(KEY_PREFS, r.value);
+      await w.set(r.value);
       return { ok: true };
     });
   return {
@@ -115,18 +115,18 @@ export function prefsRepo(local: KvArea): PrefsRepo {
       if (!snap.ok) return Promise.resolve({ ok: false, errors: ["patch:not_cloneable"] });
       const data = snap.value;
       if (!isPlainObject(data)) return Promise.resolve({ ok: false, errors: ["patch:not_object"] });
-      return withKeyLock(local, KEY_PREFS, async () => {
+      return withKeyLock(local, KEY_PREFS, async (w) => {
         const { prefs } = await get();
         const r = validatePreferences({ ...prefs, ...data });
         if (!r.ok) return r;
-        await local.set(KEY_PREFS, r.value);
+        await w.set(r.value);
         return { ok: true, prefs: r.value };
       });
     },
     reset: () =>
-      withKeyLock(local, KEY_PREFS, async () => {
+      withKeyLock(local, KEY_PREFS, async (w) => {
         const prefs = defaultPreferences();
-        await local.set(KEY_PREFS, prefs);
+        await w.set(prefs);
         return prefs;
       }),
   };
@@ -173,21 +173,21 @@ export function overridesRepo(local: KvArea, onInvalid: InvalidSink): OverridesR
     async add(override) {
       const r = validateOverride(override);
       if (!r.ok) return r;
-      return withKeyLock(local, KEY_OVERRIDES, async () => {
+      return withKeyLock(local, KEY_OVERRIDES, async (w) => {
         const current = await list();
         if (current.some((o) => sameOverride(o, r.value))) return { ok: true, added: false };
         if (current.length >= LIMITS.overridesGlobal) return { ok: false, errors: ["overrides:too_many"] };
-        await local.set(KEY_OVERRIDES, [...current, r.value]);
+        await w.set([...current, r.value]);
         return { ok: true, added: true };
       });
     },
     remove(host, titleSubstring) {
-      return withKeyLock(local, KEY_OVERRIDES, async () => {
+      return withKeyLock(local, KEY_OVERRIDES, async (w) => {
         const current = await list();
         const keep = current.filter(
           (o) => !(o.host === host && (titleSubstring === undefined || o.titleSubstring === titleSubstring)),
         );
-        await local.set(KEY_OVERRIDES, keep);
+        await w.set(keep);
         return current.length - keep.length;
       });
     },
@@ -216,10 +216,10 @@ export function activeRepo(local: KvArea): ActiveRepo {
     async put(state) {
       const r = validateActiveState(state);
       if (!r.ok) return r;
-      await withKeyLock(local, KEY_ACTIVE, () => local.set(KEY_ACTIVE, r.value));
+      await withKeyLock(local, KEY_ACTIVE, (w) => w.set(r.value));
       return { ok: true };
     },
-    remove: () => withKeyLock(local, KEY_ACTIVE, () => local.remove(KEY_ACTIVE)),
+    remove: () => withKeyLock(local, KEY_ACTIVE, (w) => w.remove()),
   };
 }
 
@@ -240,7 +240,7 @@ export function metaRepo(local: KvArea): MetaRepo {
     async put(meta) {
       const r = validateMeta(meta);
       if (!r.ok) return r;
-      await withKeyLock(local, KEY_META, () => local.set(KEY_META, r.value));
+      await withKeyLock(local, KEY_META, (w) => w.set(r.value));
       return { ok: true };
     },
   };

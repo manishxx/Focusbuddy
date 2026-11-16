@@ -6,6 +6,7 @@
 import { validatePreferences } from "../../core/storage/validate";
 import { deleteFbDatabase } from "./idb";
 import type { KvArea } from "./kv";
+import { withAreaExclusive } from "./kvLock";
 import { KEY_PREFS } from "./kvRepos";
 
 export const KEY_UI_SNAPSHOT = "ui.snapshot";
@@ -44,21 +45,28 @@ export async function deleteAllStorage(options: DeleteAllOptions): Promise<{ fai
     }),
   );
 
+  // Steps 5–6 run with each area held exclusively (review N1): pending key-locked
+  // writes finish or are refused first, and nothing queued before or during the
+  // deletion can write back afterwards (epoch, kvLock.ts).
   // Step 5: clear storage.local, then re-write prefs if the user kept them.
-  await attempt("local_clear", () => local.clear());
-  if (keepPrefs) {
-    await attempt("prefs_restore", async () => {
-      const r = validatePreferences(options.prefs);
-      if (!r.ok) throw new Error("invalid prefs");
-      await local.set(KEY_PREFS, r.value);
-    });
-  }
+  await withAreaExclusive(local, async () => {
+    await attempt("local_clear", () => local.clear());
+    if (keepPrefs) {
+      await attempt("prefs_restore", async () => {
+        const r = validatePreferences(options.prefs);
+        if (!r.ok) throw new Error("invalid prefs");
+        await local.set(KEY_PREFS, r.value);
+      });
+    }
+  });
 
   // Step 6: clear storage.session, then republish an empty snapshot.
-  await attempt("session_clear", () => session.clear());
-  await attempt("snapshot_publish", () =>
-    session.set(KEY_UI_SNAPSHOT, { v: 1, at: now(), session: null, notices: [] }),
-  );
+  await withAreaExclusive(session, async () => {
+    await attempt("session_clear", () => session.clear());
+    await attempt("snapshot_publish", () =>
+      session.set(KEY_UI_SNAPSHOT, { v: 1, at: now(), session: null, notices: [] }),
+    );
+  });
 
   return { failed };
 }

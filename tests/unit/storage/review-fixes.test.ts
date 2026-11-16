@@ -71,6 +71,7 @@ function putRaw(db: IDBDatabase, store: string, rows: unknown[]): Promise<void> 
 function recordingKv(): KvArea & { written: Map<string, unknown> } {
   const written = new Map<string, unknown>();
   return {
+    name: `recording-${Math.random()}`,
     written,
     get: (k) => Promise.resolve(written.get(k)),
     set: (k, v) => {
@@ -94,6 +95,7 @@ function slowKv(): KvArea {
   const later = <T>(fn: () => Promise<T>): Promise<T> =>
     new Promise((resolve, reject) => setTimeout(() => void fn().then(resolve, reject), Math.random() * 3));
   return {
+    name: inner.name,
     get: (k) => later(() => inner.get(k)),
     set: (k, v) => later(() => inner.set(k, v)),
     remove: (k) => later(() => inner.remove(k)),
