@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.1 (Day 04, D-018).** v1.0 approved Day 03. v1.1 adds `notificationsSeen`, `shortcutMuteMin`, `session.awaySince` and `pending.tabId/host` for the Day 04 UX contract |
+| Status | **v1.2 (Day 06, D-020).** v1.0 approved Day 03; v1.1 (Day 04) adds `notificationsSeen`, `shortcutMuteMin`, `session.awaySince`, `pending.tabId/host`; v1.2 adds §8 (implementation layer) and the IndexedDB v1 schema. No record shape changed |
 | Decision | Hybrid storage (ADR-0002): `chrome.storage.local` for small, hot state; **IndexedDB** for append-heavy and history data; `chrome.storage.session` for the UI snapshot and short-lived secrets |
 | Core rule | **Tab titles and URL paths are never persisted** (D-015). Storage holds hosts, classes and timings only |
 
@@ -191,6 +191,49 @@ Crash safety: reconciliation finds `ENDING` and completes the remaining steps id
 
 The result lists any step that failed. Note for users: notifications already delivered may remain in the operating system's notification history, which the extension can't clear (unverified).
 
-## 7. Deferred: device association (Android)
+## 7. IndexedDB schema v1 (`fb`, version 1)
+
+| Object store | keyPath | Indexes | Notes |
+|---|---|---|---|
+| `segments` | `["sessionId", "seq"]` | — | Range-deleted by `IDBKeyRange.bound([id, 0], [id, Infinity])` |
+| `interventions` | `["sessionId", "id"]` | `bySession` on `sessionId` | Deleted with its session |
+| `sessions` | `id` | `byEndedAt` on `endedAt` | Retention pruning scans `byEndedAt` below the cut-off |
+
+## 8. Implementation layer (Day 06)
+
+- **Validators are pure (`src/core/storage/`), hand-written, with no library.** Every record has a `parseX(unknown)` that returns a typed value or a list of error codes. Validators are **strict**: an unknown key fails the record. So a stray `title`, `url` or `path` field can never be written or read back (invariant 1 enforced by structure, not only by tests).
+  - `Preferences` is the one exception: it is parsed **per field**. Invalid or missing fields fall back to defaults and are reported (`resetFields`), and unknown fields are dropped (AC-15).
+  - `host` values must look like a bare normalised hostname (lowercase letters, digits, `-`, `.`; IDNs in `xn--` form; IPv4 allowed; no port; IPv6 literals are recorded without a host). Anything with `/`, `?`, `#`, `@`, a space or upper case is rejected.
+  - Segments enforce invariant 2: reason `excluded`, `internal` or `ephemeral` ⇒ no `host`.
+- **Repositories (`src/shell/storage/`)** validate on **write and on read**, over two small interfaces: `KvArea` (get/set/remove/clear, implemented by `chrome.storage.local` / `.session`) and the IndexedDB `fb` database. Tests use an in-memory `KvArea` and `fake-indexeddb`. The SW is the single writer (ADR-0001), so repositories don't lock.
+- **Reading invalid data.** Invalid `session.active` → the repository returns `{corrupt: true}`, and the engine (Day 07) treats it as "end with `stale_pause`, no summary". Invalid history rows are skipped and counted in `diag`, never thrown to the UI.
+- **Startup (`openStorage`)** runs, in order:
+  1. local migrations;
+  2. open IndexedDB (upgrade in `onupgradeneeded`);
+  3. the raw purge (if no valid `session.active`: clear the `segments` store; it runs even if steps 1–2 failed, using a plain `indexedDB.open("fb")` without a version);
+  4. retention pruning.
+
+  It returns `{mode: "normal" | "safe", notices[]}`. Safe mode = a migration or IndexedDB open failed.
+- **Retention:** `retentionDays = 0` deletes every `SessionRecord` and its interventions at prune time.
+- **Segment cap (invariant 6):** `appendSegment` at 5,000 rows extends the last segment's `end` instead of inserting.
+- **Diag log:** `{at, code}` entries only, capped at 200 (oldest dropped). Codes match `^[A-Z][A-Z0-9_]{2,40}$`; anything else is replaced by `E_INVALID_DIAG_CODE`.
+
+### 8.1 Values fixed on Day 06 (resolving ambiguities found during implementation)
+
+| Item | Decision |
+|---|---|
+| Missing defaults | `sound {enabled: true, tone: "chime", volume: 0.5}` (sound only plays at L2+, never in Gentle), `notificationsSeen: null`, `quietHours: null`, `ai.provider: "none"`, `onboardingDone: false` |
+| Upper bounds | `cooldownMin.*` ≤ 120; `extensionsMin` so that `plannedMin + extensionsMin` ≤ 480; `pauses` ≤ 200; `policy.deliveredAt` ≤ 50; `repeatsByEpisode` ≤ 100 keys; `sessionOverrides` ≤ 50; `overrides.global` ≤ 200 |
+| String minimums | `taskLabel` 1–120 (empty is invalid; the form requires it); `objective` 0–300; keyword 1–100; `titleSubstring` 1–60. Lengths in UTF-16 code units |
+| Ids | session / intervention / episode ids `^[A-Za-z0-9_-]{1,64}$`; `obsKey` `^[A-Za-z0-9+/=_:-]{1,128}$` (so a raw title can't be stored as a key; the Day 07 hash must fit) |
+| Invariant 2 | Also applies to `class: "EXCLUDED"` |
+| Prefs repair | Per top-level field. Repaired prefs **are written back at startup**, so the `prefs_reset` notice appears once, not on every start |
+| Meta | Missing → schema 1, written. Unreadable, or newer than the code → safe mode |
+| Safe mode | The raw purge runs; retention pruning is skipped (aggregates kept); notices: `safe_mode` |
+| Retention | `pruneOlderThan` also removes orphaned interventions (no SessionRecord) older than the cut-off; retention 0 clears both stores |
+| quietHours | `start` ≠ `end` |
+| ActiveState time | `lastSeenAt` ≥ `session.startedAt` |
+
+## 9. Deferred: device association (Android)
 
 Not stored in V1. If the Day 22 gate passes, the QR payload is computed on demand: `{v, sessionId (random), issuedAt, durationSec, mode, label?}`, with no stored device record (FEASIBILITY §5, Option A).

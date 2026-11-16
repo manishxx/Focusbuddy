@@ -8,7 +8,7 @@ export default defineConfig({
     testTimeout: 60_000,
     coverage: {
       provider: "v8",
-      include: ["src/core/**/*.ts"],
+      include: ["src/core/**/*.ts", "src/shell/storage/**/*.ts"],
       exclude: ["src/core/**/*.json"],
       reporter: [["text", { skipFull: false }], "text-summary"],
       // Per file, so one well-tested module cannot hide an untested one.
