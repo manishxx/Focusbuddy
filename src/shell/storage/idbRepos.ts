@@ -12,6 +12,7 @@ import {
 import type { InterventionRecord, Segment, SessionRecord } from "../../core/types";
 import {
   INDEX_BY_ENDED_AT,
+  INDEX_BY_ENDED_AT_ID,
   INDEX_BY_SESSION,
   type KeyRangeApi,
   runTx,
@@ -32,7 +33,7 @@ const sessionSegments = (keyRange: KeyRangeApi, sessionId: string): IDBKeyRange 
 
 // ---- segments (raw tier) ----
 
-export type AppendOutcome = "appended" | "extended" | "dropped";
+export type AppendOutcome = "appended" | "extended" | "dropped" | "duplicate";
 
 export interface SegmentsRepo {
   /** At the cap, extends the last segment's end instead of inserting (invariant 6). */
@@ -57,35 +58,52 @@ export function segmentsRepo(deps: IdbRepoDeps, cap: number = SEGMENT_CAP): Segm
         const store = tx.objectStore(STORE_SEGMENTS);
         const range = sessionSegments(keyRange, seg.sessionId);
         let result: AppendOutcome = "appended";
-        const countReq = store.count(range);
-        countReq.onsuccess = () => {
-          if (countReq.result < cap) {
-            store.put(seg);
+        // Review F7: never overwrite an existing [sessionId, seq].
+        const insert = (): void => {
+          const addReq = store.add(seg);
+          addReq.onerror = (event) => {
+            if (addReq.error?.name !== "ConstraintError") return; // other errors abort the transaction
+            event.preventDefault();
+            result = "duplicate";
+          };
+        };
+        const existsReq = store.getKey([seg.sessionId, seg.seq]);
+        existsReq.onsuccess = () => {
+          if (existsReq.result !== undefined) {
+            result = "duplicate";
             return;
           }
-          const cursorReq = store.openCursor(range, "prev");
-          cursorReq.onsuccess = () => {
-            const cursor = cursorReq.result;
-            if (cursor === null) {
-              store.put(seg);
+          const countReq = store.count(range);
+          countReq.onsuccess = () => {
+            if (countReq.result < cap) {
+              insert();
               return;
             }
-            const last = validateSegment(cursor.value);
-            if (!last.ok) {
-              invalid += 1;
-              result = "dropped";
-              return;
-            }
-            const extended: Segment = { ...last.value };
-            if (seg.end === undefined) delete extended.end;
-            else extended.end = Math.max(extended.end ?? seg.end, seg.end);
-            cursor.update(extended);
-            result = "extended";
+            const cursorReq = store.openCursor(range, "prev");
+            cursorReq.onsuccess = () => {
+              const cursor = cursorReq.result;
+              if (cursor === null) {
+                insert();
+                return;
+              }
+              const last = validateSegment(cursor.value);
+              if (!last.ok) {
+                invalid += 1;
+                result = "dropped";
+                return;
+              }
+              const extended: Segment = { ...last.value };
+              if (seg.end === undefined) delete extended.end;
+              else extended.end = Math.max(extended.end ?? seg.end, seg.end);
+              cursor.update(extended);
+              result = "extended";
+            };
           };
         };
         return () => result;
       });
       await onInvalid("E_INVALID_SEGMENT_ROW", invalid);
+      if (outcome === "duplicate") return { ok: false, errors: ["segment:duplicate_seq"] };
       return { ok: true, outcome };
     },
 
@@ -204,14 +222,17 @@ export function interventionsRepo(deps: IdbRepoDeps): InterventionsRepo {
 
 // ---- sessions (aggregate tier) ----
 
-export type PruneResult = { sessions: number; orphanInterventions: number };
+export type PruneResult = { sessions: number; orphanInterventions: number; invalidSessions: number };
 
 export interface SessionsRepo {
   put(record: unknown): Promise<WriteResult>;
   /** null when absent or invalid. */
   get(id: string): Promise<SessionRecord | null>;
-  /** Newest first by endedAt; `before` pages by endedAt (exclusive); limit 1–50. */
-  list(options?: { limit?: number; before?: number }): Promise<SessionRecord[]>;
+  /**
+   * Newest first by [endedAt, id]; `before` is the last record of the previous page
+   * (exclusive), so equal endedAt values never skip or repeat a row; limit 1–50.
+   */
+  list(options?: { limit?: number; before?: { endedAt: number; id: string } }): Promise<SessionRecord[]>;
   /** Deletes the session and its interventions in one transaction. */
   delete(id: string): Promise<void>;
   /**
@@ -255,8 +276,11 @@ export function sessionsRepo(deps: IdbRepoDeps): SessionsRepo {
       let invalid = 0;
       const out = await runTx(db, STORE_SESSIONS, "readonly", (tx) => {
         const found: SessionRecord[] = [];
-        const range = before !== undefined && Number.isFinite(before) ? keyRange.upperBound(before, true) : null;
-        const cursorReq = tx.objectStore(STORE_SESSIONS).index(INDEX_BY_ENDED_AT).openCursor(range, "prev");
+        const range =
+          before !== undefined && Number.isFinite(before.endedAt) && typeof before.id === "string"
+            ? keyRange.upperBound([before.endedAt, before.id], true)
+            : null;
+        const cursorReq = tx.objectStore(STORE_SESSIONS).index(INDEX_BY_ENDED_AT_ID).openCursor(range, "prev");
         cursorReq.onsuccess = () => {
           const cursor = cursorReq.result;
           if (cursor === null) return;
@@ -278,11 +302,11 @@ export function sessionsRepo(deps: IdbRepoDeps): SessionsRepo {
         return () => undefined;
       }),
 
-    pruneOlderThan: (cut) =>
-      runTx(db, both, "readwrite", (tx) => {
+    pruneOlderThan: async (cut) => {
+      const pruned = await runTx(db, both, "readwrite", (tx) => {
         const sessions = tx.objectStore(STORE_SESSIONS);
         const interventions = tx.objectStore(STORE_INTERVENTIONS);
-        const result: PruneResult = { sessions: 0, orphanInterventions: 0 };
+        const result: PruneResult = { sessions: 0, orphanInterventions: 0, invalidSessions: 0 };
         if (cut === Number.POSITIVE_INFINITY) {
           // retentionDays = 0: keep nothing, including rows the index can't see.
           const countReq = sessions.count();
@@ -318,11 +342,30 @@ export function sessionsRepo(deps: IdbRepoDeps): SessionsRepo {
             };
           };
         };
+        // Review F5: rows that fail validation (the index may not even see them) are
+        // deleted with their interventions. Runs after the expired-session pass.
+        const scanInvalid = (): void => {
+          const allReq = sessions.openCursor();
+          allReq.onsuccess = () => {
+            const cursor = allReq.result;
+            if (cursor === null) {
+              scanOrphans();
+              return;
+            }
+            if (!validateSessionRecord(cursor.value).ok) {
+              const key = cursor.primaryKey;
+              if (typeof key === "string") deleteInterventionsIn(tx, key);
+              cursor.delete();
+              result.invalidSessions += 1;
+            }
+            cursor.continue();
+          };
+        };
         const cursorReq = sessions.index(INDEX_BY_ENDED_AT).openCursor(keyRange.upperBound(cut, true));
         cursorReq.onsuccess = () => {
           const cursor = cursorReq.result;
           if (cursor === null) {
-            scanOrphans();
+            scanInvalid();
             return;
           }
           const key = cursor.primaryKey;
@@ -332,6 +375,9 @@ export function sessionsRepo(deps: IdbRepoDeps): SessionsRepo {
           cursor.continue();
         };
         return () => result;
-      }),
+      });
+      await onInvalid("E_SESSION_ROW_INVALID", pruned.invalidSessions);
+      return pruned;
+    },
   };
 }

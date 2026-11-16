@@ -12,9 +12,18 @@ export const STORE_INTERVENTIONS = "interventions";
 export const STORE_SESSIONS = "sessions";
 export const INDEX_BY_SESSION = "bySession";
 export const INDEX_BY_ENDED_AT = "byEndedAt";
+/** Compound [endedAt, id] for stable pagination with equal timestamps (review F6). */
+export const INDEX_BY_ENDED_AT_ID = "byEndedAtId";
+
+/** The v1 schema: stores and their indexes, checked after every open (review F8). */
+export const FB_SCHEMA: Readonly<Record<string, readonly string[]>> = {
+  [STORE_SEGMENTS]: [],
+  [STORE_INTERVENTIONS]: [INDEX_BY_SESSION],
+  [STORE_SESSIONS]: [INDEX_BY_ENDED_AT, INDEX_BY_ENDED_AT_ID],
+};
 
 /** The IDBKeyRange statics the repositories use (injectable: Node has no global IDBKeyRange). */
-export type KeyRangeApi = Pick<typeof IDBKeyRange, "bound" | "only" | "upperBound">;
+export type KeyRangeApi = Pick<typeof IDBKeyRange, "bound" | "only" | "upperBound" | "lowerBound">;
 
 /** A storage failure carrying a diag-safe code (never a browser error message). */
 export class StorageError extends Error {
@@ -43,6 +52,22 @@ export function upgradeFb(db: IDBDatabase, oldVersion: number): void {
   if (!names.contains(STORE_SESSIONS)) {
     const s = db.createObjectStore(STORE_SESSIONS, { keyPath: "id" });
     s.createIndex(INDEX_BY_ENDED_AT, "endedAt");
+    s.createIndex(INDEX_BY_ENDED_AT_ID, ["endedAt", "id"]);
+  }
+}
+
+/** True if `db` has every v1 store and index. */
+export function hasFbSchema(db: IDBDatabase): boolean {
+  const names = Object.keys(FB_SCHEMA);
+  if (!names.every((n) => db.objectStoreNames.contains(n))) return false;
+  try {
+    const tx = db.transaction(names, "readonly");
+    return names.every((n) => {
+      const indexNames = tx.objectStore(n).indexNames;
+      return (FB_SCHEMA[n] ?? []).every((i) => indexNames.contains(i));
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -89,6 +114,12 @@ export function openFb(factory: IDBFactory, options: OpenFbOptions = {}): Promis
         db.close();
         options.onVersionChangeClose?.();
       };
+      if (!hasFbSchema(db)) {
+        // A v1 database without the v1 stores/indexes: treat as an open failure (safe mode).
+        db.close();
+        settle(() => reject(new StorageError("E_IDB_SCHEMA_MISMATCH")));
+        return;
+      }
       settle(() => resolve(db));
     };
     req.onerror = (event) => {

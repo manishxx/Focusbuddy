@@ -197,7 +197,7 @@ The result lists any step that failed. Note for users: notifications already del
 |---|---|---|---|
 | `segments` | `["sessionId", "seq"]` | — | Range-deleted by `IDBKeyRange.bound([id, 0], [id, Infinity])` |
 | `interventions` | `["sessionId", "id"]` | `bySession` on `sessionId` | Deleted with its session |
-| `sessions` | `id` | `byEndedAt` on `endedAt` | Retention pruning scans `byEndedAt` below the cut-off |
+| `sessions` | `id` | `byEndedAt` on `endedAt`; `byEndedAtId` on `[endedAt, id]` | Retention pruning scans `byEndedAt` below the cut-off (exclusive), plus a full pass that deletes invalid rows. History pages by `byEndedAtId`, newest first (Day 06 review F5, F6) |
 
 ## 8. Implementation layer (Day 06)
 
@@ -215,7 +215,7 @@ The result lists any step that failed. Note for users: notifications already del
 
   It returns `{mode: "normal" | "safe", notices[]}`. Safe mode = a migration or IndexedDB open failed.
 - **Retention:** `retentionDays = 0` deletes every `SessionRecord` and its interventions at prune time.
-- **Segment cap (invariant 6):** `appendSegment` at 5,000 rows extends the last segment's `end` instead of inserting.
+- **Segment cap (invariant 6):** `appendSegment` at 5,000 rows extends the last segment's `end` instead of inserting. Appending an existing `seq` is refused (`segment:duplicate_seq`); after a crash, the engine treats that as "already written".
 - **Diag log:** `{at, code}` entries only, capped at 200 (oldest dropped). Codes match `^[A-Z][A-Z0-9_]{2,40}$`; anything else is replaced by `E_INVALID_DIAG_CODE`.
 
 ### 8.1 Values fixed on Day 06 (resolving ambiguities found during implementation)
@@ -228,11 +228,14 @@ The result lists any step that failed. Note for users: notifications already del
 | Ids | session / intervention / episode ids `^[A-Za-z0-9_-]{1,64}$`; `obsKey` `^[A-Za-z0-9+/=_:-]{1,128}$` (so a raw title can't be stored as a key; the Day 07 hash must fit) |
 | Invariant 2 | Also applies to `class: "EXCLUDED"` |
 | Prefs repair | Per top-level field. Repaired prefs **are written back at startup**, so the `prefs_reset` notice appears once, not on every start |
-| Meta | Missing → schema 1, written. Unreadable, or newer than the code → safe mode |
+| Meta | Missing → schema 1, written. `schemaVersion === 1` with other fields invalid → repaired (`installedAt = now`, diag `E_META_REPAIRED`), normal mode. `schemaVersion` not a number, or newer than the code → safe mode (Day 06 review F10) |
 | Safe mode | The raw purge runs; retention pruning is skipped (aggregates kept); notices: `safe_mode` |
 | Retention | `pruneOlderThan` also removes orphaned interventions (no SessionRecord) older than the cut-off; retention 0 clears both stores |
 | quietHours | `start` ≠ `end` |
 | ActiveState time | `lastSeenAt` ≥ `session.startedAt` |
+| Validation input | Every validator first takes a pure plain-data snapshot. Accessor properties (getters), Proxies, non-plain prototypes, symbols, functions, cycles and sparse arrays are rejected, so the value validated is exactly the value written (Day 06 review F1, F2) |
+| Concurrency | Repositories serialise read-modify-write per storage key, so concurrent calls can't lose updates, even though the engine is also a serialised single writer (Day 06 review F3) |
+| `titleSubstring` | Also rejects `://`, `/`, `?`, `#`, `@` and control characters: words, not URL fragments (Day 06 review F12) |
 
 ## 9. Deferred: device association (Android)
 

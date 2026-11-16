@@ -374,7 +374,7 @@ describe("sessionsRepo", () => {
     expect(await repo.get("missing")).toBeNull();
     expect((await repo.list()).map((s) => s.id)).toEqual(["s4", "s3", "s2", "s1", "s0"]);
     expect((await repo.list({ limit: 2 })).map((s) => s.id)).toEqual(["s4", "s3"]);
-    expect((await repo.list({ limit: 2, before: 350 })).map((s) => s.id)).toEqual(["s2", "s1"]);
+    expect((await repo.list({ limit: 2, before: { endedAt: 350, id: "s3" } })).map((s) => s.id)).toEqual(["s2", "s1"]);
     expect((await repo.list({ limit: 0 })).map((s) => s.id)).toEqual(["s4"]);
     expect(await repo.list({ limit: 1.5 })).toHaveLength(5);
 
@@ -413,14 +413,18 @@ describe("sessionsRepo", () => {
     await interventions.put(intervention({ sessionId: "gone", id: "d", createdAt: 5 * DAY_MS }));
     await interventions.put(intervention({ sessionId: "live", id: "e", createdAt: 99 * DAY_MS }));
 
-    expect(await repo.pruneOlderThan(cutoff(now, 30))).toEqual({ sessions: 1, orphanInterventions: 1 });
+    expect(await repo.pruneOlderThan(cutoff(now, 30))).toEqual({
+      sessions: 1,
+      orphanInterventions: 1,
+      invalidSessions: 0,
+    });
     expect(await repo.get("old")).toBeNull();
     expect(await repo.get("new")).not.toBeNull();
     expect(await interventions.listForSession("old")).toEqual([]);
     expect(await interventions.listForSession("gone")).toEqual([]);
     expect((await interventions.listForSession("new")).map((i) => i.id)).toEqual(["c"]);
     expect((await interventions.listForSession("live")).map((i) => i.id)).toEqual(["e"]);
-    expect(await repo.pruneOlderThan(Number.NaN)).toEqual({ sessions: 0, orphanInterventions: 0 });
+    expect(await repo.pruneOlderThan(Number.NaN)).toEqual({ sessions: 0, orphanInterventions: 0, invalidSessions: 0 });
     db.close();
   });
 
@@ -434,7 +438,11 @@ describe("sessionsRepo", () => {
     await putRaw(db, "sessions", { id: "no-ended-at", title: "corrupt" });
     await interventions.put(intervention({ sessionId: "a" }));
     await interventions.put(intervention({ sessionId: "zzz" }));
-    expect(await repo.pruneOlderThan(cutoff(now, 0))).toEqual({ sessions: 3, orphanInterventions: 0 });
+    expect(await repo.pruneOlderThan(cutoff(now, 0))).toEqual({
+      sessions: 3,
+      orphanInterventions: 0,
+      invalidSessions: 0,
+    });
     expect(await rawAll(db, "sessions")).toEqual([]);
     expect(await rawAll(db, "interventions")).toEqual([]);
     db.close();

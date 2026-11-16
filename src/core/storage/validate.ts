@@ -38,6 +38,7 @@ import type {
   SoundTone,
 } from "../types";
 import { defaultPreferences } from "./defaults";
+import { nullObject, trySnapshot } from "./snapshot";
 
 export type Result<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
@@ -179,6 +180,22 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** current.obsKey is a hash (ARCHITECTURE §5 step 8), never a raw title. */
 const OBS_KEY = /^[A-Za-z0-9+/=_:-]{1,128}$/;
 
+/** Keys never accepted in a record-like map, even if they would pass its key check. */
+export const FORBIDDEN_MAP_KEYS: readonly string[] = ["__proto__", "constructor", "prototype"];
+
+/**
+ * Override.titleSubstring is a plain word or phrase (review F12): no URL pieces
+ * (`://`, `/`, `?`, `#`, `@`) and no control characters.
+ */
+export function isSafeTitleSubstring(v: string): boolean {
+  if (/[/?#@]/.test(v)) return false;
+  for (let i = 0; i < v.length; i++) {
+    const code = v.charCodeAt(i);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return false;
+  }
+  return true;
+}
+
 /** Collects errors; every check returns a well-typed fallback so callers can build values. */
 export class Checker {
   readonly errors: string[] = [];
@@ -256,7 +273,16 @@ export class Checker {
       return [];
     }
     const items: unknown[] = v;
-    return items.map((x, i) => item(x, `${path}[${i}]`));
+    const out: T[] = [];
+    // Index loop, not map(): map() skips holes, so a hole would escape validation.
+    for (let i = 0; i < items.length; i++) {
+      if (!(i in items)) {
+        this.fail(`${path}[${i}]`, "hole");
+        continue;
+      }
+      out.push(item(items[i], `${path}[${i}]`));
+    }
+    return out;
   }
 
   host(v: unknown, path: string): string {
@@ -298,9 +324,10 @@ export class Checker {
       this.fail(path, "too_many");
       return {};
     }
-    const out: Record<string, number> = {};
+    // Null prototype, and the prototype-related names are refused outright (review F4).
+    const out = nullObject<number>();
     for (const [k, value] of Object.entries(v)) {
-      if (!key(k)) {
+      if (FORBIDDEN_MAP_KEYS.includes(k) || !key(k)) {
         this.fail(`${path}.${safeKey(k)}`, "invalid_key");
         continue;
       }
@@ -434,7 +461,7 @@ export function buildPreferences(field: <K extends keyof Preferences>(k: K) => P
 }
 
 /** Strict: every field present and valid, no unknown keys. Used before every write. */
-export function validatePreferences(v: unknown): Result<Preferences> {
+function validatePreferencesInner(v: unknown): Result<Preferences> {
   const c = new Checker();
   // notificationsSeen and quietHours may be null, which obj() treats as present.
   const o = c.obj(v, "prefs", PREF_KEYS);
@@ -446,7 +473,11 @@ export function validatePreferences(v: unknown): Result<Preferences> {
 
 function readOverride(c: Checker, v: unknown, p: string): Override {
   const o = c.obj(v, p, ["host", "createdAt"], ["titleSubstring"]);
-  const titleSubstring = opt(o, "titleSubstring", (x) => c.str(x, `${p}.titleSubstring`, LIMITS.titleSubstring, 1));
+  const titleSubstring = opt(o, "titleSubstring", (x) => {
+    const t = c.str(x, `${p}.titleSubstring`, LIMITS.titleSubstring, 1);
+    if (!isSafeTitleSubstring(t)) c.fail(`${p}.titleSubstring`, "unsafe_characters");
+    return t;
+  });
   return {
     host: c.host(o.host, `${p}.host`),
     createdAt: c.time(o.createdAt, `${p}.createdAt`),
@@ -454,7 +485,7 @@ function readOverride(c: Checker, v: unknown, p: string): Override {
   };
 }
 
-export function validateOverride(v: unknown): Result<Override> {
+function validateOverrideInner(v: unknown): Result<Override> {
   const c = new Checker();
   return c.result(readOverride(c, v, "override"));
 }
@@ -480,7 +511,7 @@ function readSessionConfig(c: Checker, o: Obj, p: string): SessionConfig {
   };
 }
 
-export function validateSessionConfig(v: unknown): Result<SessionConfig> {
+function validateSessionConfigInner(v: unknown): Result<SessionConfig> {
   const c = new Checker();
   const o = c.obj(v, "config", SESSION_CONFIG_REQUIRED, SESSION_CONFIG_OPTIONAL);
   return c.result(readSessionConfig(c, o, "config"));
@@ -527,7 +558,7 @@ function readActiveSession(c: Checker, v: unknown, p: string): ActiveSession {
   };
 }
 
-export function validateActiveState(v: unknown): Result<ActiveState> {
+function validateActiveStateInner(v: unknown): Result<ActiveState> {
   const c = new Checker();
   const p = "active";
   const o = c.obj(
@@ -538,11 +569,12 @@ export function validateActiveState(v: unknown): Result<ActiveState> {
   );
   const current = opt(o, "current", (x) => {
     const q = c.obj(x, `${p}.current`, ["segmentSeq", "tabId", "obsKey", "class", "since"]);
-    if (typeof q.obsKey !== "string" || !OBS_KEY.test(q.obsKey)) c.fail(`${p}.current.obsKey`, "invalid_obs_key");
+    const obsKey = q.obsKey; // read once (review F1)
+    if (typeof obsKey !== "string" || !OBS_KEY.test(obsKey)) c.fail(`${p}.current.obsKey`, "invalid_obs_key");
     return {
       segmentSeq: c.int(q.segmentSeq, `${p}.current.segmentSeq`, 0),
       tabId: c.int(q.tabId, `${p}.current.tabId`),
-      obsKey: typeof q.obsKey === "string" ? q.obsKey : "",
+      obsKey: typeof obsKey === "string" ? obsKey : "",
       class: c.oneOf(q.class, `${p}.current.class`, RELEVANCE_CLASSES),
       since: c.time(q.since, `${p}.current.since`),
     };
@@ -611,7 +643,7 @@ export function validateActiveState(v: unknown): Result<ActiveState> {
   return c.result(value);
 }
 
-export function validateSegment(v: unknown): Result<Segment> {
+function validateSegmentInner(v: unknown): Result<Segment> {
   const c = new Checker();
   const p = "segment";
   const o = c.obj(v, p, ["sessionId", "seq", "start", "class", "reason", "attention"], ["end", "host"]);
@@ -639,7 +671,7 @@ export function validateSegment(v: unknown): Result<Segment> {
 
 // ---- aggregate tier ----
 
-export function validateInterventionRecord(v: unknown): Result<InterventionRecord> {
+function validateInterventionRecordInner(v: unknown): Result<InterventionRecord> {
   const c = new Checker();
   const p = "intervention";
   // Invariant 4: no host or title field exists, so strictness rejects them.
@@ -705,7 +737,7 @@ function readSummary(c: Checker, v: unknown, p: string): SessionSummary {
   };
 }
 
-export function validateSessionRecord(v: unknown): Result<SessionRecord> {
+function validateSessionRecordInner(v: unknown): Result<SessionRecord> {
   const c = new Checker();
   const p = "sessionRecord";
   const o = c.obj(v, p, [
@@ -739,7 +771,7 @@ export function validateSessionRecord(v: unknown): Result<SessionRecord> {
 
 // ---- system ----
 
-export function validateMeta(v: unknown): Result<Meta> {
+function validateMetaInner(v: unknown): Result<Meta> {
   const c = new Checker();
   const o = c.obj(v, "meta", ["schemaVersion", "installedAt"]);
   return c.result({
@@ -751,7 +783,7 @@ export function validateMeta(v: unknown): Result<Meta> {
 /** Diag codes (DATA_MODEL §8). */
 export const DIAG_CODE = /^[A-Z][A-Z0-9_]{2,40}$/;
 
-export function validateDiagEntry(v: unknown): Result<DiagEntry> {
+function validateDiagEntryInner(v: unknown): Result<DiagEntry> {
   const c = new Checker();
   const o = c.obj(v, "diag", ["at", "code"]);
   const code = c.str(o.code, "diag.code", 41);
@@ -766,7 +798,7 @@ export function validateDiagEntry(v: unknown): Result<DiagEntry> {
  * `undefined` (nothing stored yet) gives the defaults with no resets; any other
  * non-object gives the defaults with every field listed.
  */
-export function parsePreferences(raw: unknown): { prefs: Preferences; resetFields: string[] } {
+function parsePreferencesInner(raw: unknown): { prefs: Preferences; resetFields: string[] } {
   const defaults = defaultPreferences();
   if (raw === undefined) return { prefs: defaults, resetFields: [] };
   if (!isPlainObject(raw)) return { prefs: defaults, resetFields: [...PREF_KEYS] };
@@ -788,4 +820,38 @@ export function parsePreferences(raw: unknown): { prefs: Preferences; resetField
     if (!PREF_KEYS.some((known) => known === k)) resetFields.push(`unknown:${safeKey(k)}`);
   }
   return { prefs, resetFields };
+}
+
+// ---- exported entry points: validate a read-once snapshot, never the input (review F1) ----
+
+function guarded<T>(root: string, inner: (v: unknown) => Result<T>): (v: unknown) => Result<T> {
+  return (v) => {
+    const snap = trySnapshot(v);
+    return snap.ok ? inner(snap.value) : { ok: false, errors: [`${root}:not_cloneable`] };
+  };
+}
+
+export const validatePreferences: (v: unknown) => Result<Preferences> = guarded("prefs", validatePreferencesInner);
+export const validateOverride: (v: unknown) => Result<Override> = guarded("override", validateOverrideInner);
+export const validateSessionConfig: (v: unknown) => Result<SessionConfig> = guarded(
+  "config",
+  validateSessionConfigInner,
+);
+export const validateActiveState: (v: unknown) => Result<ActiveState> = guarded("active", validateActiveStateInner);
+export const validateSegment: (v: unknown) => Result<Segment> = guarded("segment", validateSegmentInner);
+export const validateInterventionRecord: (v: unknown) => Result<InterventionRecord> = guarded(
+  "intervention",
+  validateInterventionRecordInner,
+);
+export const validateSessionRecord: (v: unknown) => Result<SessionRecord> = guarded(
+  "sessionRecord",
+  validateSessionRecordInner,
+);
+export const validateMeta: (v: unknown) => Result<Meta> = guarded("meta", validateMetaInner);
+export const validateDiagEntry: (v: unknown) => Result<DiagEntry> = guarded("diag", validateDiagEntryInner);
+
+/** Per-field read of stored preferences (see parsePreferencesInner). Input that isn't plain data counts as a non-object. */
+export function parsePreferences(raw: unknown): { prefs: Preferences; resetFields: string[] } {
+  const snap = trySnapshot(raw);
+  return parsePreferencesInner(snap.ok ? snap.value : null);
 }

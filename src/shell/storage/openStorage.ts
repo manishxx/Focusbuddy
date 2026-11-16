@@ -2,7 +2,8 @@
  * Storage start-up (DATA_MODEL §8), in this order:
  *   1. storage.local migrations;
  *   2. open IndexedDB `fb` (upgrade in onupgradeneeded);
- *   3. raw purge: if there is no valid session.active, clear `segments`. Runs even
+ *   3. raw purge: if there is no valid session.active, clear `segments` (else delete
+ *      other sessions' segments). Runs even
  *      if 1–2 failed, then through a version-less open, and only if the store exists;
  *   4. retention pruning with prefs.retentionDays (normal mode only); repaired
  *      prefs are written back first (normal mode only, §8.1).
@@ -10,6 +11,7 @@
  */
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS, runMigrations, type Migration } from "../../core/storage/migrations";
 import { cutoff } from "../../core/storage/retention";
+import { trySnapshot } from "../../core/storage/snapshot";
 import { isPlainObject, validateMeta } from "../../core/storage/validate";
 import { errorCode, type KeyRangeApi, openFb, openFbExisting, runTx, STORE_SEGMENTS } from "./idb";
 import {
@@ -76,62 +78,89 @@ export type OpenStorageOptions = {
   segmentCap?: number;
 };
 
-/** The stored schema version: null if there is no meta, "invalid" if it is unreadable. */
-function storedVersion(raw: unknown): number | null | "invalid" {
-  if (raw === undefined) return null;
-  if (!isPlainObject(raw)) return "invalid";
-  const v = raw.schemaVersion;
+/**
+ * The stored schema version (DATA_MODEL §8.1, review F10):
+ * - no meta, or meta without schemaVersion → "missing" (treated as schema 1);
+ * - meta that isn't a plain object, or a schemaVersion that isn't a non-negative
+ *   integer → "invalid" (safe mode). A version newer than the code fails in runMigrations.
+ */
+function storedVersion(raw: unknown): number | "missing" | "invalid" {
+  if (raw === undefined) return "missing";
+  const snap = trySnapshot(raw);
+  if (!snap.ok || !isPlainObject(snap.value)) return "invalid";
+  const v = snap.value.schemaVersion;
+  if (v === undefined) return "missing";
   return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : "invalid";
 }
 
-/** Step 1. Returns diag codes; an empty list means success. */
-async function migrateLocal(local: KvArea, now: () => number, migrations: readonly Migration[]): Promise<string[]> {
+/** Step 1. `failed` non-empty means safe mode; `notes` are diag codes for repairs. */
+async function migrateLocal(
+  local: KvArea,
+  now: () => number,
+  migrations: readonly Migration[],
+): Promise<{ failed: string[]; notes: string[] }> {
   const data: Record<string, unknown> = {};
   for (const key of LOCAL_KEYS) {
     const value = await local.get(key);
     if (value !== undefined) data[key] = value;
   }
-  const version = storedVersion(data[KEY_META]);
-  if (version === "invalid") return ["E_META_INVALID"];
-  if (version === null) {
-    // First run (or meta lost): schema 1 is the only schema ever written.
+  const rawMeta = data[KEY_META];
+  const version = storedVersion(rawMeta);
+  if (version === "invalid") return { failed: ["E_META_INVALID"], notes: [] };
+  if (version === "missing") {
+    // No meta (first run) or no schemaVersion: schema 1 is the only schema ever written.
     await local.set(KEY_META, { schemaVersion: CURRENT_SCHEMA_VERSION, installedAt: now() });
-    return [];
+    return { failed: [], notes: rawMeta === undefined ? [] : ["E_META_REPAIRED"] };
   }
   const result = runMigrations(data, version, migrations);
-  if (!result.ok) return result.errors;
-  const oldMeta = data[KEY_META];
-  const oldInstalled = isPlainObject(oldMeta) ? oldMeta.installedAt : undefined;
+  if (!result.ok) return { failed: result.errors, notes: [] };
+  if (result.applied === 0) {
+    // Current schema: repair any other invalid field (installedAt = now).
+    if (validateMeta(rawMeta).ok) return { failed: [], notes: [] };
+    await local.set(KEY_META, { schemaVersion: result.version, installedAt: now() });
+    return { failed: [], notes: ["E_META_REPAIRED"] };
+  }
+  const oldInstalled = isPlainObject(rawMeta) ? rawMeta.installedAt : undefined;
   const installedAt =
     typeof oldInstalled === "number" && Number.isFinite(oldInstalled) && oldInstalled >= 0 ? oldInstalled : now();
-  if (result.applied > 0) {
-    // Data keys first, meta last: a crash in between re-runs the (idempotent) steps.
-    for (const key of LOCAL_KEYS) {
-      if (key === KEY_META) continue;
-      const value = result.data[key];
-      if (value === undefined) await local.remove(key);
-      else await local.set(key, value);
-    }
+  // Data keys first, meta last: a crash in between re-runs the (idempotent) steps.
+  for (const key of LOCAL_KEYS) {
+    if (key === KEY_META) continue;
+    const value = result.data[key];
+    if (value === undefined) await local.remove(key);
+    else await local.set(key, value);
   }
-  const meta = { schemaVersion: result.version, installedAt };
-  if (result.applied > 0 || !validateMeta(data[KEY_META]).ok) await local.set(KEY_META, meta);
-  return [];
+  await local.set(KEY_META, { schemaVersion: result.version, installedAt });
+  return { failed: [], notes: [] };
 }
 
-/** Step 3 with an open connection. */
-function clearSegments(db: IDBDatabase): Promise<void> {
+/**
+ * Step 3 with an open connection. No session → clear the store. A valid session →
+ * delete every other session's segments (review F9): keys are [sessionId, seq], so
+ * everything below [id] and above [id, []] (arrays sort after numbers) belongs to others.
+ */
+function purgeSegments(db: IDBDatabase, keepSessionId: string | null, keyRange: KeyRangeApi): Promise<void> {
   return runTx(db, STORE_SEGMENTS, "readwrite", (tx) => {
-    tx.objectStore(STORE_SEGMENTS).clear();
+    const store = tx.objectStore(STORE_SEGMENTS);
+    if (keepSessionId === null) store.clear();
+    else {
+      store.delete(keyRange.upperBound([keepSessionId], true));
+      store.delete(keyRange.lowerBound([keepSessionId, []], true));
+    }
     return () => undefined;
   });
 }
 
 /** Step 3 without a versioned connection: version-less open, and only if `segments` exists. */
-async function purgeWithoutVersion(factory: IDBFactory): Promise<void> {
+async function purgeWithoutVersion(
+  factory: IDBFactory,
+  keepSessionId: string | null,
+  keyRange: KeyRangeApi,
+): Promise<void> {
   const db = await openFbExisting(factory);
   if (db === null) return;
   try {
-    if (db.objectStoreNames.contains(STORE_SEGMENTS)) await clearSegments(db);
+    if (db.objectStoreNames.contains(STORE_SEGMENTS)) await purgeSegments(db, keepSessionId, keyRange);
   } finally {
     db.close();
   }
@@ -150,10 +179,11 @@ export async function openStorage(options: OpenStorageOptions): Promise<OpenStor
 
   // 1. storage.local migrations.
   try {
-    const errors = await migrateLocal(local, now, migrations);
-    if (errors.length > 0) {
+    const { failed, notes } = await migrateLocal(local, now, migrations);
+    codes.push(...notes);
+    if (failed.length > 0) {
       safe = true;
-      codes.push(...errors);
+      codes.push(...failed);
     }
   } catch (error) {
     safe = true;
@@ -171,19 +201,19 @@ export async function openStorage(options: OpenStorageOptions): Promise<OpenStor
 
   const active = activeRepo(local);
 
-  // 3. Raw purge: no valid session.active ⇒ no segments (invariant 3). A read
-  // failure counts as "no valid session": raw data must never outlive one.
+  // 3. Raw purge: no valid session.active ⇒ no segments (invariant 3); a valid one ⇒
+  // only its own segments. A read failure counts as "no valid session": raw data
+  // must never outlive one.
   try {
-    let hasSession = false;
+    let keep: string | null = null;
     try {
-      hasSession = "state" in (await active.get());
+      const read = await active.get();
+      if ("state" in read) keep = read.state.session.id;
     } catch {
       codes.push("E_ACTIVE_READ");
     }
-    if (!hasSession) {
-      if (db !== null) await clearSegments(db);
-      else await purgeWithoutVersion(idbFactory);
-    }
+    if (db !== null) await purgeSegments(db, keep, keyRange);
+    else await purgeWithoutVersion(idbFactory, keep, keyRange);
   } catch (error) {
     storageError = true;
     codes.push(errorCode(error, "E_RAW_PURGE"));
