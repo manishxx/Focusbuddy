@@ -1,6 +1,6 @@
 /**
  * Shared domain types for the core (ARCHITECTURE §3).
- * Persisted record shapes follow docs/DATA_MODEL.md §2 (v1.2). The validators in
+ * Persisted record shapes follow docs/DATA_MODEL.md §2 (v1.3). The validators in
  * ./storage/validate.ts are the runtime counterpart of these types.
  */
 
@@ -86,11 +86,23 @@ export type ActiveSession = SessionConfig & {
   awaySince?: number;
 };
 
+/**
+ * DATA_MODEL v1.3: attempt time (epoch ms) per notification. A notification whose
+ * timestamp is set is never shown again, so a restart can't replay it (NFR-3, AC-02).
+ */
+export type Notified = { start?: number; continuePrompt?: number; breakOver?: number; breakRepeat?: number };
+
 export type ActiveState = {
   schemaVersion: 1;
   session: ActiveSession;
   lastSeenAt: number;
   attention: Attention;
+  /** v1.3: when `attention` last changed (auto-pause timing). */
+  attentionSince: number;
+  /** v1.3 (D-022): time the browser was closed during this session (counts as session time; summary awayMin). */
+  awayMs: number;
+  /** v1.3: attempt time per notification (no replay after restart). */
+  notified: Notified;
   current?: { segmentSeq: number; tabId: number; obsKey: string; class: RelevanceClass; since: number };
   drift: { phase: DriftPhase; since: number; accumulatedMs: number; episodeId?: string };
   lastRelevant?: { tabId: number; host: string; at: number };

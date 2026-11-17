@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e:smoke": "node tests/e2e/smoke.mjs",
+    "e2e:session": "node tests/e2e/session-restart.mjs",
     "ci": "npm run typecheck && npm run lint && npm run format:check && npm run lint:messages && npm run check:manifest && npm run check:secrets && npm run test:coverage && npm run build && npm run check:manifest -- --dist-only && npm run check:secrets -- --dir dist"
   },
   "dependencies": {

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.0, approved Day 03** by the architect after two independent reviews (architecture/performance: 2 blockers, 11 major, 8 minor; security/privacy: 2 blockers, 8 major, 7 minor). All findings applied |
+| Status | **v1.1 (Day 07, D-021).** v1.0 approved Day 03 after two independent reviews. v1.1 adds the §5.1.1 transition table and the Day 07 engine scope. Day 05 added the §13 results |
 | Owner | Principal Architect (Claude Opus 5.5) |
 | Inputs | [PRD](PRD.md) v1.0, [FEASIBILITY](FEASIBILITY.md) SD-1 to SD-11 |
 | Companion docs | [API_CONTRACTS](API_CONTRACTS.md) · [DATA_MODEL](DATA_MODEL.md) · [SECURITY](SECURITY.md) · [ADRs](DECISIONS/) |
@@ -171,6 +171,66 @@ stateDiagram-v2
 - Pause, break and resume reset drift to ON_TASK and close any open episode.
 - Invalid transitions return an error result. Nothing is thrown, and state is unchanged.
 
+### 5.1.1 Transition table (Day 07; the reducer implements exactly this)
+
+`now` is the input's timestamp, supplied by the shell from an injected `Clock`; the reducer never reads a clock.
+
+**Time:**
+- `elapsedMs = now − startedAt − Σ closed pauses − (open pause ? now − open.from : 0)`.
+- `totalMs = (plannedMin + extensionsMin) × 60 000`.
+- `remainingMs = max(0, totalMs − elapsedMs)`.
+- `endsAt = now + remainingMs` while ACTIVE / ON_BREAK; for PAUSED it's the frozen value `pausedAt + remaining at pause`.
+
+| From | Input | Guard | To | Effects / notes |
+|---|---|---|---|---|
+| none | `session.start {draft}` | draft valid (DATA_MODEL validators); no active session | ACTIVE | new id; `startedAt = now`; `attention = ACTIVE_INPUT`, `attentionSince = now`; alarms `fb.sessionEnd` (when = endsAt), `fb.tick` (30 s); start notification (`start.*`, generic if private); badge `ON`; action title; snapshot |
+| any active | `session.start` | — | unchanged | error `invalid_state {activeSessionId}` (AC-29) |
+| ACTIVE | `session.pause` | — | PAUSED | open pause `{from: now, kind: "pause"}`; clear `fb.tick`, `fb.sessionEnd`; set `fb.stalePause` (now + 4 h); drift → ON_TASK; badge `II` |
+| PAUSED | `session.resume` | not `awaitingContinue` | ACTIVE | close pause; re-set `fb.sessionEnd`, `fb.tick`; clear `fb.stalePause`; badge `ON` |
+| PAUSED | `session.resume` | `awaitingContinue` | unchanged | error `invalid_state` (use `session.continue`) |
+| PAUSED | `session.continue` | `awaitingContinue` | ACTIVE | as resume, plus clears `awaitingContinue` and `awaySince`; clears the continue notification |
+| ACTIVE | `break.start {minutes 1–60}` | — | ON_BREAK | open pause `{kind: "break"}`; `breakEndsAt = min(now + minutes, the moment the session would end)` (BR-2; while on break the session clock is stopped, so the cap is `now + remainingMs`); alarms `fb.breakEnd`, clear `fb.tick`; badge `BRK` |
+| ON_BREAK | `break.end` / alarm `fb.breakEnd` | — | ACTIVE (alarm path: stays ON_BREAK and shows the break-over prompt, see next row) | user path: close pause, resume as above |
+| ON_BREAK | alarm `fb.breakEnd` | — | ON_BREAK | break-over notification (`break.over.*`); set `fb.breakPrompt` (now + 5 min) once (BR-3). The session clock stays stopped until the user acts. **Decision:** an unanswered break never consumes session time |
+| ON_BREAK | alarm `fb.breakPrompt` | prompt not yet repeated | ON_BREAK | repeat the notification once; then nothing more (BR-3) |
+| ON_BREAK | `break.extend {1–15}` | — | ON_BREAK | `breakEndsAt += minutes` (capped as above); re-arm `fb.breakEnd`; reset the BR-3 repeat |
+| ACTIVE / PAUSED / ON_BREAK | `session.extend {5–120}` | total ≤ 480 | unchanged | `extensionsMin += minutes`; re-arm `fb.sessionEnd` if ACTIVE; error `invalid_argument` over the cap |
+| ACTIVE / PAUSED / ON_BREAK | `session.updateNote` | lengths valid | unchanged | — |
+| ACTIVE | alarm `fb.sessionEnd` or any input with `remainingMs = 0` | — | ENDING `time_up` | see ENDING |
+| ACTIVE / PAUSED / ON_BREAK | `session.stop` | — | ENDING `user_stop` | see ENDING |
+| PAUSED | alarm `fb.stalePause` or any input with an open pause > 4 h | — | ENDING `stale_pause` | — |
+| ACTIVE | `IdleChanged {state, at}` | — | ACTIVE | `attention`, `attentionSince = at` (the event's own time) |
+| ACTIVE | `Tick` / `IdleChanged` | attention LOCKED ≥ 10 min, or IDLE ≥ 30 min (from `attentionSince`) | PAUSED | open pause `{from: attentionSince, kind: "auto_absent"}` (the absence itself isn't counted as session time); `awaitingContinue = true`; `awaySince = attentionSince`; badge `II`; no notification yet |
+| PAUSED · awaitingContinue | `IdleChanged {active}` | — | PAUSED | show the "Continue your session?" notification once (`continue.*`); snapshot |
+| ENDING | (immediately, same input) | — | none | persist ENDING **first**; then effect `BuildSummaryAndPurgeRaw` (SessionRecord from the session's times + whatever segments exist; activity aggregates are zero until Day 09+); clear every `fb.*` alarm and the session's notifications; badge none; snapshot `session: null`, `lastSummaryId` |
+
+**Reconciliation (Day 07 scope of §4):** steps 1–5 and 7, plus step 6 without the `tabs.query` part (Day 09):
+- The gap from `lastSeenAt` to now is closed as AWAY.
+- An ACTIVE session whose `endsAt ≤ now` ends `expired_while_closed`; a PAUSED one over 4 h ends `stale_pause`.
+- Alarms are re-created from state.
+- A `{corrupt}` `session.active` is ended as `stale_pause` with no summary (DATA_MODEL §8).
+
+**Decisions taken after implementation (Day 07, D-022):**
+- **Browser closed (gap from `lastSeenAt` to Startup).**
+  - It counts as session time (wall clock, BR-1), so a session that ran out while Chrome was closed ends `expired_while_closed` (J10).
+  - The gap goes into `ActiveState.awayMs` (summary `awayMin`) and is not recorded as a pause.
+  - If the session survives and the gap is ≥ 10 min, it auto-pauses at Startup (`awaitingContinue`, `awaySince = lastSeenAt`), the same anti-covert rule as a long lock (D-016).
+- **Idle or locked auto-pause.** The pause starts at `attentionSince`, so that absence is excluded from session time (D-021). The two kinds of absence differ on purpose: the user wasn't at the machine with a session they could see, and the session only paused once the rule fired.
+- **Ending checks.** Time-up and stale-pause are checked before every input. An input that arrives after the end ends the session and replies `ok`.
+- **Stale break.** An ON_BREAK longer than 4 h also ends with `stale_pause`.
+- **`session.extend` over the 480-min cap** clamps to the cap and replies `ok {cappedAt}`; the UI shows `extend.capped`.
+- **`session.resume` while ON_BREAK** returns `invalid_state`; `break.end` is the command.
+- **Resuming resets attention.** Resume, continue and break end set `attention = ACTIVE_INPUT` at `now`.
+- **`notified.*`** is per occurrence: break prompts reset per break or extension, and the continue prompt resets per auto-pause. `start` is never reset.
+- **Ticks.** A tick that changes nothing refreshes `lastSeenAt` only when it is ≥ 60 s old (§7 amended), so the browser-closed gap stays accurate.
+- **Summary purge.** Summary building deletes segments only. Interventions are aggregate data and are kept with their SessionRecord (DATA_MODEL §1).
+- **Alarm persistence.** `persistAcrossSessions: true` is passed when the Chrome major version is ≥ 150 (SD-1).
+
+**Effect idempotence:**
+- Notification ids are deterministic (`fb.start.<sessionId>`, `fb.continue.<sessionId>`, `fb.break.<sessionId>`).
+- Alarms are named, so re-creating one replaces it.
+- A restart never re-shows a notification whose `attemptedAt` is persisted (NFR-3, AC-02).
+
 ### 5.2 Activity observation (FR-M1, M2, M5, M7, M9)
 The tabs adapter produces at most one `Observation` per *context change* of the focused window's active tab. It also re-runs on `tabs.onReplaced` (prerender) for the new tab id. The pipeline works on the **raw URL and title in memory**. Only the step-7 output can ever be stored.
 1. Drop if no ACTIVE session (FR-M4: early return before any work).
@@ -257,7 +317,7 @@ A pure function: `decide(episode, prefs, history, now) → Intervention | none`.
 
 | Mechanism | Use |
 |---|---|
-| `fb.tick` alarm, 30 s period | Only while a session is ACTIVE (not PAUSED or ON_BREAK). Re-evaluates drift/recovery thresholds, "ignored" detection and quiet hours. Cleared otherwise. A tick that changes nothing writes nothing |
+| `fb.tick` alarm, 30 s period | Only while a session is ACTIVE (not PAUSED or ON_BREAK). Re-evaluates drift/recovery thresholds, "ignored" detection and quiet hours. Cleared otherwise. A tick that changes nothing writes nothing, except a `lastSeenAt` refresh when it is ≥ 60 s old (D-022) |
 | `fb.sessionEnd` alarm, `when = endsAt` | Ends the session (re-scheduled on extend/pause/resume) |
 | `fb.breakEnd`, `fb.breakPrompt` one-shot alarms | Break end, and the single "break over?" repeat (BR-3) |
 | `fb.stalePause` one-shot alarm | Ends a pause longer than 4 h |

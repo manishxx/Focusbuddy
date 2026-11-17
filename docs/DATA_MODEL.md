@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.2 (Day 06, D-020).** v1.0 approved Day 03; v1.1 (Day 04) adds `notificationsSeen`, `shortcutMuteMin`, `session.awaySince`, `pending.tabId/host`; v1.2 adds §8 (implementation layer) and the IndexedDB v1 schema. No record shape changed |
+| Status | **v1.3 (Day 07, D-021/D-022): adds `ActiveState.attentionSince`, `awayMs` and `notified`.** Earlier: v1.2 (Day 06, D-020). v1.0 approved Day 03; v1.1 (Day 04) adds `notificationsSeen`, `shortcutMuteMin`, `session.awaySince`, `pending.tabId/host`; v1.2 adds §8 (implementation layer) and the IndexedDB v1 schema. No record shape changed |
 | Decision | Hybrid storage (ADR-0002): `chrome.storage.local` for small, hot state; **IndexedDB** for append-heavy and history data; `chrome.storage.session` for the UI snapshot and short-lived secrets |
 | Core rule | **Tab titles and URL paths are never persisted** (D-015). Storage holds hosts, classes and timings only |
 
@@ -72,6 +72,9 @@ type ActiveState = {
   };
   lastSeenAt: number;               // updated on every write; used to close segments after a browser close
   attention: "ACTIVE_INPUT" | "IDLE" | "LOCKED" | "BROWSER_UNFOCUSED";
+  attentionSince: number;           // v1.3: when `attention` last changed (auto-pause timing)
+  awayMs: number;                   // v1.3: time the browser was closed during this session (counts as session time; summary awayMin)
+  notified: { start?: number; continuePrompt?: number; breakOver?: number; breakRepeat?: number }; // v1.3: attemptedAt per notification (no replay after restart)
   current?: { segmentSeq: number; tabId: number; obsKey: string; class: RelevanceClass; since: number };
   drift: { phase: "ON_TASK" | "DRIFT_PENDING" | "DRIFTED" | "RECOVERING"; since: number; accumulatedMs: number; episodeId?: string };
   lastRelevant?: { tabId: number; host: string; at: number };   // live title read via tabs.get when needed

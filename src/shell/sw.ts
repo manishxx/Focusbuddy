@@ -1,9 +1,21 @@
 /**
- * Service worker entry (ARCHITECTURE §2, §3). All listeners are registered
+ * Service worker entry (ARCHITECTURE §2–§4). All listeners are registered
  * synchronously at the top level so Chrome can wake the worker for them.
- * Day 05 scaffold: no tab, idle or alarm handling yet.
+ *
+ * Start order on every evaluation: hardening → openStorage (migrations, raw purge,
+ * retention) → engine → Startup reconciliation, which is always the FIRST input.
+ * Alarms, idle changes and messages that arrive earlier wait for the engine and
+ * queue behind Startup.
  */
+import { systemClock } from "../core/clock";
+import type { SessionInput } from "../core/session";
+import { chromeEffectPorts } from "./adapters/chrome";
+import { supportsPersistAcrossSessions } from "./adapters/chromeVersion";
+import { createEngine, type Engine, type EngineReply } from "./engine/engine";
 import { harden, isHardened, type HardeningApi } from "./hardening";
+import { createRouter, type Reply } from "./messaging/router";
+import { chromeLocalArea, chromeSessionArea } from "./storage/kv";
+import { openStorage } from "./storage/openStorage";
 
 // Explicit wrappers: chrome APIs are only ever called directly (lint rule fb/chrome-access).
 const api: HardeningApi = {
@@ -29,6 +41,56 @@ const ready: Promise<string[]> = harden(api, "evaluate");
  */
 export const readyHardened: Promise<boolean> = ready.then(isHardened);
 
+/** idle.setDetectionInterval accepts 15 s or more; prefs already enforce 15–1800. */
+function setIdleInterval(seconds: number): void {
+  try {
+    chrome.idle.setDetectionInterval(seconds);
+  } catch {
+    // Not fatal: the default (60 s) stays in effect.
+  }
+}
+
+async function startEngine(): Promise<Engine> {
+  await readyHardened;
+  const local = chromeLocalArea();
+  const opened = await openStorage({
+    local,
+    session: chromeSessionArea(),
+    idbFactory: indexedDB,
+    now: () => systemClock.now(),
+  });
+  try {
+    setIdleInterval((await opened.repos.prefs.get()).prefs.idleThresholdSec);
+  } catch {
+    setIdleInterval(300);
+  }
+  const engine = createEngine({
+    repos: opened.repos,
+    ports: chromeEffectPorts({ persistAcrossSessions: supportsPersistAcrossSessions(navigator.userAgent) }),
+    clock: systemClock,
+    newId: () => crypto.randomUUID(),
+    notices: opened.notices,
+  });
+  // Synchronously, before anyone else can see the engine: Startup is the first input.
+  void engine.enqueue({ kind: "startup" });
+  return engine;
+}
+
+const engineReady: Promise<Engine> = startEngine();
+
+function submit(input: SessionInput): Promise<EngineReply> {
+  return engineReady.then(
+    (engine) => engine.enqueue(input),
+    (): EngineReply => ({ ok: false, error: "internal" }),
+  );
+}
+
+const router = createRouter({
+  runtimeId: chrome.runtime.id,
+  getURL: (path) => chrome.runtime.getURL(path),
+  engine: () => engineReady,
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   // Opens nothing on install yet (onboarding arrives later). Re-applying is
   // idempotent and covers an install that races the top-level call.
@@ -37,4 +99,17 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   void ready.then(() => harden(api, "startup"));
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  void submit({ kind: "alarm", name: alarm.name });
+});
+
+chrome.idle.onStateChanged.addListener((state) => {
+  void submit({ kind: "idle", state, at: systemClock.now() });
+});
+
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse: (reply: Reply) => void) => {
+  void router.handle(message, sender).then(sendResponse, () => sendResponse({ id: "", ok: false, error: "internal" }));
+  return true; // reply asynchronously
 });

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.1 (Day 04, D-018).** v1.0 approved Day 03; v1.1 adds the commands and snapshot fields the Day 04 UX review found missing |
+| Status | **v1.2 (Day 07, D-022): adds two error codes, the `SessionDraft` definition and the `cappedAt` reply.** Earlier: v1.1 (Day 04, D-018). v1.0 approved Day 03; v1.1 adds the commands and snapshot fields the Day 04 UX review found missing |
 | Scope | Messages between extension contexts. There's no external API: no `externally_connectable`, and no `onMessageExternal` listener |
 
 ## 1. Envelope
@@ -22,7 +22,9 @@ type Reply =
 
 type ErrorCode =
   | "invalid_message" | "unknown_type" | "forbidden_sender" | "invalid_state"
-  | "not_found" | "permission_missing" | "storage_error" | "internal";
+  | "not_found" | "permission_missing" | "storage_error" | "internal"
+  | "invalid_argument"    // v1.2 (D-022): a payload value is out of range
+  | "not_implemented";    // v1.2 (D-022): a known command whose handler isn't built yet (removed before release)
 ```
 
 Rules:
@@ -48,10 +50,10 @@ Content scripts can't forge `sender.url`: the browser sets it from the frame's c
 | Type | Payload | Effect / reply data | PRD |
 |---|---|---|---|
 | `parse.intent` | `{ text: string ≤ 1000 }` | `{ draft: SessionDraft, warnings[] }`; pure, nothing stored | FR-T1, T2 |
-| `session.start` | `{ draft: SessionDraft }` | Starts and shows a start notification + badge; replies `{ sessionId }`. If one is active → `invalid_state` with `{ activeSessionId }` (AC-29) | FR-S1, S4 |
+| `session.start` | `{ draft: SessionDraft }` where `SessionDraft = SessionConfig & { plannedMin: 5–480 }` with `mode` optional (defaults to prefs) (D-022) | Starts and shows a start notification + badge; replies `{ sessionId }`. If one is active → `invalid_state` with `{ activeSessionId }` (AC-29) | FR-S1, S4 |
 | `session.pause` / `session.resume` | `{}` | State change | FR-S6 |
 | `session.continue` | `{}` | Confirms "Continue your session?" after an absence auto-pause | BR-1 (amended) |
-| `session.extend` | `{ minutes: 5–120 }` | Re-schedules the end alarm; total ≤ 480 | FR-S6 |
+| `session.extend` | `{ minutes: 5–120 }` | Re-schedules the end alarm; total ≤ 480. Over the cap → clamped, reply `{ cappedAt }` (D-022) | FR-S6 |
 | `session.stop` | `{}` | ENDING → summary → ENDED | FR-S6, H3 |
 | `session.updateNote` | `{ objective?: string, nextStep?: string }` | Updates the session | FR-S7 |
 | `relevant.preview` | `{ interventionId }` | **v1.1.** Reply `{ host, mixedUse: boolean, suggestedWords?: string ≤ 60 }`. The SW reads the live title of the intervention's tab (`tabs.get`) and proposes words for mixed-use hosts. Nothing is stored; the reply is shown once and discarded. Excluded or private-window context → `invalid_state` | J8, D-018 |

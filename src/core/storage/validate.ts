@@ -24,6 +24,7 @@ import type {
   InterventionResponse,
   Meta,
   Mode,
+  Notified,
   Override,
   PauseKind,
   Preferences,
@@ -108,6 +109,9 @@ export const RESPONSES: readonly [InterventionResponse, ...InterventionResponse[
   "dismissed",
   "ignored",
 ];
+
+/** DATA_MODEL v1.3 `ActiveState.notified` keys. */
+export const NOTIFIED_KEYS: readonly (keyof Notified)[] = ["start", "continuePrompt", "breakOver", "breakRepeat"];
 
 // ---- limits (DATA_MODEL §2, PRD FR-S1) ----
 
@@ -567,9 +571,28 @@ function validateActiveStateInner(v: unknown): Result<ActiveState> {
   const o = c.obj(
     v,
     p,
-    ["schemaVersion", "session", "lastSeenAt", "attention", "drift", "policy", "sessionOverrides", "segSeq"],
+    [
+      "schemaVersion",
+      "session",
+      "lastSeenAt",
+      "attention",
+      "attentionSince",
+      "awayMs",
+      "notified",
+      "drift",
+      "policy",
+      "sessionOverrides",
+      "segSeq",
+    ],
     ["current", "lastRelevant", "pending"],
   );
+  // DATA_MODEL v1.3: one optional attempt time per notification.
+  const n = c.obj(o.notified, `${p}.notified`, [], NOTIFIED_KEYS);
+  const notified: Notified = {};
+  for (const k of NOTIFIED_KEYS) {
+    const t = opt(n, k, (y) => c.time(y, `${p}.notified.${k}`));
+    if (t !== undefined) notified[k] = t;
+  }
   const current = opt(o, "current", (x) => {
     const q = c.obj(x, `${p}.current`, ["segmentSeq", "tabId", "obsKey", "class", "since"]);
     const obsKey = q.obsKey; // read once (review F1)
@@ -620,6 +643,9 @@ function validateActiveStateInner(v: unknown): Result<ActiveState> {
     session: readActiveSession(c, o.session, `${p}.session`),
     lastSeenAt: c.time(o.lastSeenAt, `${p}.lastSeenAt`),
     attention: c.oneOf(o.attention, `${p}.attention`, ATTENTIONS),
+    attentionSince: c.time(o.attentionSince, `${p}.attentionSince`),
+    awayMs: c.num(o.awayMs, `${p}.awayMs`, { min: 0 }),
+    notified,
     drift: {
       phase: c.oneOf(d.phase, `${p}.drift.phase`, DRIFT_PHASES),
       since: c.time(d.since, `${p}.drift.since`),
@@ -643,6 +669,7 @@ function validateActiveStateInner(v: unknown): Result<ActiveState> {
     ...(pending !== undefined && { pending }),
   };
   if (value.lastSeenAt < value.session.startedAt) c.fail(`${p}.lastSeenAt`, "before_session_start");
+  if (value.attentionSince < value.session.startedAt) c.fail(`${p}.attentionSince`, "before_session_start");
   return c.result(value);
 }
 
