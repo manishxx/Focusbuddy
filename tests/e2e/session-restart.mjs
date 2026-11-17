@@ -165,12 +165,12 @@ try {
     alarms: (await chrome.alarms.getAll()).map((a) => a.name).sort(),
   });
   const pageState = () => page.evaluate(stateFn);
-  const swState = async () => {
+  const swEval = async (fn, arg) => {
     const target = await browser.waitForTarget(isSw, { timeout: 15_000 });
     const session = await target.createCDPSession();
     try {
       const { result, exceptionDetails } = await session.send("Runtime.evaluate", {
-        expression: `(${stateFn.toString()})()`,
+        expression: `(${fn.toString()})(${JSON.stringify(arg ?? null)})`,
         awaitPromise: true,
         returnByValue: true,
       });
@@ -180,6 +180,17 @@ try {
       await session.detach().catch(() => undefined);
     }
   };
+  const swState = () => swEval(stateFn);
+  // Review F1: chrome.idle.queryState and the stored attention, read together in the SW.
+  const IDLE_TO_ATTENTION = { active: "ACTIVE_INPUT", idle: "IDLE", locked: "LOCKED" };
+  const readAttentionPair = (thresholdSec) =>
+    swEval(async (sec) => {
+      const [idle, items] = await Promise.all([
+        chrome.idle.queryState(sec),
+        chrome.storage.local.get("session.active"),
+      ]);
+      return { idleState: idle, attention: items["session.active"]?.attention ?? null };
+    }, thresholdSec);
   /** Stops every SW, waits 3 s, wakes ours with prefs.get (queued behind Startup). */
   const cdp = await page.createCDPSession();
   await cdp.send("ServiceWorker.enable");
@@ -263,10 +274,24 @@ try {
   const active = await readActive();
   summary.steps.activeAfterRestart = active;
   summary.steps.idleStateInSw = swAfter.idleState;
+  // Must match chrome.idle; a mismatch is tolerated only if a second read 1 s later
+  // agrees (an idle transition racing the first read).
+  const threshold = wake?.data?.prefs?.idleThresholdSec ?? 300;
+  const first = await readAttentionPair(threshold);
+  const matches = (r) => IDLE_TO_ATTENTION[r.idleState] === r.attention;
+  let second = null;
+  if (!matches(first)) {
+    await sleep(1_000);
+    second = await readAttentionPair(threshold);
+  }
+  summary.steps.attentionVsIdle = { thresholdSec: threshold, first, second };
   check(
-    "stored attention is consistent with chrome.idle in the SW",
-    swAfter.idleState === "active" ? true : ["ACTIVE_INPUT", "IDLE", "LOCKED"].includes(active?.attention),
-    { idleState: swAfter.idleState, attention: active?.attention },
+    "stored attention matches chrome.idle.queryState in the SW",
+    matches(first) || (second !== null && matches(second)),
+    {
+      first,
+      second,
+    },
   );
   const problems = activeProblems(active, sessionId);
   check("session.active is valid (DATA_MODEL v1.3 shape)", problems.length === 0, problems);

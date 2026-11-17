@@ -516,7 +516,26 @@ function startup(st: ActiveState | null, input: StartupInput, ctx: Ctx): ReduceR
   }
   if (s.state === "ACTIVE" && !attentive) {
     const paused = maybeAutoPause(st, ctx);
-    if (paused !== null) return paused;
+    if (paused !== null) {
+      // Review N2: after a browser-closed gap ≥ 10 min the user is back (they restarted
+      // Chrome), so the continue prompt is shown at this Startup, once, as in the
+      // attentive branch.
+      const p = paused.state;
+      if (
+        gap < AWAY_AUTO_PAUSE_MS ||
+        p === null ||
+        p.session.state !== "PAUSED" ||
+        p.session.awaitingContinue !== true ||
+        p.notified.continuePrompt !== undefined
+      ) {
+        return paused;
+      }
+      return {
+        ...paused,
+        state: { ...p, notified: { ...p.notified, continuePrompt: ctx.at } },
+        effects: [...paused.effects, continueNotification(s.id, ctx)],
+      };
+    }
   }
   if (!away) return withStartRepeat(st, input, ctx);
   // Attention restarts at now, so a later back-dated idle event can't reach into the gap.
@@ -542,18 +561,18 @@ function startup(st: ActiveState | null, input: StartupInput, ctx: Ctx): ReduceR
     drift: onTask(ctx.at),
     notified: { ...st.notified, continuePrompt: ctx.at },
   };
-  return ok(next, [
-    ...alarmsFor(next, ctx.at),
-    {
-      type: "ShowNotification",
-      id: notificationIds(s.id).continue,
-      titleKey: "continue.title",
-      bodyKey: "continue.body",
-      vars: {},
-      generic: ctx.privateNotifications,
-    },
-    ...show(next, ctx),
-  ]);
+  return ok(next, [...alarmsFor(next, ctx.at), continueNotification(s.id, ctx), ...show(next, ctx)]);
+}
+
+function continueNotification(sessionId: string, ctx: Ctx): Effect {
+  return {
+    type: "ShowNotification",
+    id: notificationIds(sessionId).continue,
+    titleKey: "continue.title",
+    bodyKey: "continue.body",
+    vars: {},
+    generic: ctx.privateNotifications,
+  };
 }
 
 /** Window after start in which a lost start notification is shown once more (AC-32). */

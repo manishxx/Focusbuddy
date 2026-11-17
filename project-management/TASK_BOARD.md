@@ -14,6 +14,7 @@
 - [x] D04-C1 Independent cognitive-load + WCAG 2.2 AA review (23 + 4 findings applied); UX_GUIDELINES v1.0
 - [x] D05 ADR-0007, scaffold, guards, CI, platform facts V1–V8, review + re-check
 - [x] D06 Storage layer (validators, repositories, openStorage, deleteAll), review + re-check
+- [x] D07 Session state machine, engine, reconciliation, router; AC-02 e2e; review + re-check
 
 ## Waiting on owner (none block Day 06)
 - [ ] Remaining manual checks: M2, M4, M5, M8, M11, M13, M16–M19, and M7 with system volume muted. Needs macOS notifications for Chrome turned on
@@ -21,13 +22,15 @@
 - [ ] Approve downloading Chrome for Testing 120 (M22; the Day 05 check was skipped without it)
 - [ ] M20 (V7 focus) and M21 (toolbar colours) in `tests/manual/OWNER_CHECKS.md`
 
-## Next (Day 07 — session state machine)
-- [ ] D07-A1 State machine design: DRAFT→ACTIVE⇄PAUSED/ON_BREAK→ENDING→ENDED, auto-pause, stale pause, time accounting (FR-S1–S7, BR-1–3)
-- [ ] D07-B1 Pure session reducer + timing; SW engine queue (load→reduce→persist→effects) wired to the storage layer; reconciliation on start
-- [ ] D07-C1 Transition tests, SW-restart tests (AC-02) in real Chrome, first real-Chrome storage run; independent review
+## Next (Day 08 — goals, contexts, parser)
+- [ ] D08-A1 Task model and parser spec: durations (`3 hours`, `90 min`, `1.5h`, `until 5pm`), known-site dictionary (≥ 30), objective and subject extraction, warnings (BR-5)
+- [ ] D08-B1 Pure parser + `parse.intent` command; session form logic (draft validation already exists)
+- [ ] D08-C1 Parser fixtures (AC-01 and ≥ 40 sentences), independent review
 
 ## Carry-over
-- Day 07: engine handles `E_STORAGE_DELETED`, `segment:duplicate_seq`, `{corrupt}` session (stale_pause), DATA_MODEL §6 steps 1–3 and 7; obsKey format; first real-Chrome storage run.
+- Day 10: deterministic idle e2e (15 s threshold) covering the restart test's idle case; real lock check stays manual.
+- Day 09: `data.deleteAll` steps 1–3 and 7 with the engine; obsKey format `^[A-Za-z0-9+/=_:-]{1,128}$`.
+- Before release: remove `not_implemented`; real safe-mode boot and browser-restart (J10) checks in Chrome.
 - Day 09: one injection adapter that awaits `readyHardened` (R7); AC-10 test that injects the overlay and watches the tab's network (Day 05 F4).
 - Day 13: move the hard-coded UI strings listed in `src/ui/shared/product.ts` into the bank.
 - When a fixed typescript-eslint is ≥ 14 days old: upgrade (npm audit, dev-only).

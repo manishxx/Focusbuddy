@@ -682,3 +682,21 @@ describe("review F10: generic notifications and tooltips carry no task text", ()
     }
   });
 });
+
+describe("review N4: a range error mixed with a shape error → invalid_message", () => {
+  it.each<[string, string, unknown]>([
+    ["minutes out of range + unknown key", "break.start", { minutes: 99, extra: 1 }],
+    ["minutes out of range + unknown key (extend)", "session.extend", { minutes: 500, unit: "min" }],
+    ["plannedMin out of range + bad mode", "session.start", { draft: draft({ plannedMin: 999, mode: "chaos" }) }],
+    [
+      "label too long + malformed host",
+      "session.start",
+      { draft: draft({ taskLabel: "t".repeat(200), allowedHosts: ["a/b"] }) },
+    ],
+    ["note too long + unknown key", "session.updateNote", { objective: "x".repeat(400), title: "t" }],
+    ["note too long + wrong type", "session.updateNote", { objective: "x".repeat(400), nextStep: 5 }],
+  ])("%s", (_n, type, payload) => {
+    const st = type === "session.start" ? null : started();
+    expect(run(st, cmd(type, payload), T0 + MIN)).toMatchObject({ state: st, effects: [], error: "invalid_message" });
+  });
+});

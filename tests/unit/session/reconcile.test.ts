@@ -217,7 +217,8 @@ describe("D-023 review F4: no double counting of a gap while IDLE/LOCKED", () =>
     expect(next.awayMs).toBe(0);
     expect(next.session).toMatchObject({ state: "PAUSED", awaitingContinue: true, awaySince: T0 + 10 * MIN });
     expect(next.session.pauses).toEqual([{ from: T0 + 10 * MIN, kind: "auto_absent" }]);
-    expect(notifications(r.effects)).toEqual([]); // the prompt waits for IdleChanged{active}
+    // Review N2: the gap was ≥ 10 min, so the user is back: the prompt is shown now.
+    expect(notifications(r.effects).map((n) => n.id)).toEqual(["fb.continue.s1"]);
   });
 
   it("a gap counted in awayMs resets attention, so a back-dated idle event can't reach into it", () => {
@@ -242,5 +243,51 @@ describe("Startup in safe mode (DATA_MODEL §5)", () => {
   });
   it("no session: same as a normal Startup", () => {
     expect(run(null, { kind: "startup", safeMode: true }, T0)).toEqual(run(null, { kind: "startup" }, T0));
+  });
+});
+
+describe("review N2: continue prompt after a long gap via the IDLE/LOCKED branch", () => {
+  it("gap ≥ 10 min and the lock rule pauses at Startup → the continue prompt is shown once", () => {
+    let st = started(T0, { plannedMin: 120 });
+    st = valid(run(st, { kind: "idle", state: "locked", at: T0 + 10 * MIN }, T0 + 10 * MIN));
+    st = { ...st, lastSeenAt: T0 + 12 * MIN };
+    const r = run(st, startup, T0 + 40 * MIN);
+    const next = valid(r);
+    expect(next.session).toMatchObject({ state: "PAUSED", awaitingContinue: true, awaySince: T0 + 10 * MIN });
+    expect(next.notified.continuePrompt).toBe(T0 + 40 * MIN);
+    expect(notifications(r.effects)).toEqual([
+      {
+        type: "ShowNotification",
+        id: "fb.continue.s1",
+        titleKey: "continue.title",
+        bodyKey: "continue.body",
+        vars: {},
+        generic: false,
+      },
+    ]);
+    // Once: neither a second Startup nor the user's return shows it again.
+    expect(notifications(run(next, startup, T0 + 41 * MIN).effects)).toEqual([]);
+    expect(
+      notifications(run(next, { kind: "idle", state: "active", at: T0 + 42 * MIN }, T0 + 42 * MIN).effects),
+    ).toEqual([]);
+  });
+
+  it("gap under 10 min: the lock rule pauses but the prompt waits for IdleChanged{active}", () => {
+    let st = started(T0, { plannedMin: 120 });
+    st = valid(run(st, { kind: "idle", state: "locked", at: T0 + 10 * MIN }, T0 + 10 * MIN));
+    st = { ...st, lastSeenAt: T0 + 22 * MIN };
+    const r = run(st, startup, T0 + 25 * MIN);
+    expect(valid(r).session.state).toBe("PAUSED");
+    expect(notifications(r.effects)).toEqual([]);
+    expect(valid(r).notified.continuePrompt).toBeUndefined();
+  });
+
+  it("an absence over 4 h ends the session instead (stale_pause), with no prompt", () => {
+    let st = started(T0, { plannedMin: 480 });
+    st = valid(run(st, { kind: "idle", state: "locked", at: T0 + 10 * MIN }, T0 + 10 * MIN));
+    st = { ...st, lastSeenAt: T0 + 12 * MIN };
+    const r = run(st, startup, T0 + 300 * MIN);
+    expect(valid(r).session.ending?.endReason).toBe("stale_pause");
+    expect(notifications(r.effects)).toEqual([]);
   });
 });

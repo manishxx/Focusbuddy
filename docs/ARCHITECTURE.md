@@ -230,7 +230,8 @@ stateDiagram-v2
 - **ENDING is retried on every input**, not only at Startup. A failed summary write can't leave the user stuck; `session.stop` on ENDING replies `ok`.
 - **Idle events are back-dated.** Chrome reports `idle` only after `idleThresholdSec`, so the input's time is `now − idleThresholdSec`. The 30-minute rule then counts from the last real input.
 - **No double counting.** When Startup finds attention IDLE or LOCKED, the browser-closed gap isn't added to `awayMs`; the auto-pause from `attentionSince` already covers it. Invariant (property-tested): active + away + break + pause time never exceeds the wall clock.
-- **Start notification after a crash (AC-32).** At Startup, an ACTIVE session younger than 60 s whose start notification isn't showing gets it once more.
+- **Start notification after a crash (AC-32).** At Startup, an ACTIVE session younger than 60 s whose start notification isn't showing gets it once more. Accepted cost (re-review N1): if the user dismissed it and the SW restarts inside those 60 s, it shows one more time. Showing the monitoring notice matters more than avoiding that single repeat.
+- **Continue prompt at Startup.** Any auto-pause decided at Startup shows the continue prompt at that Startup, whichever branch decided it (re-review N2).
 - **Leftover notifications.** At Startup with no session, every `fb.*` notification is cleared.
 - **Boot failure.** If storage can't open, commands reply `storage_error`, a `safe_mode` or `storage_error` notice is published, and initialisation is retried on the next input.
 - **Thresholds are inclusive (≥)** for 10 min, 30 min and 4 h.

@@ -57,9 +57,12 @@ function setIdleInterval(seconds: number): void {
 // Review F2: a per-evaluation boot marker (no user data).
 void writeBootMarker(chromeSessionArea(), systemClock.now()).catch(() => undefined);
 
-// Review F11: nothing may end up as an unhandled rejection (chrome://extensions → Errors).
-addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
-  event.preventDefault();
+// Review F11/N3: an unhandled rejection is a bug. Record a diag code (no message text,
+// which could carry a URL) and let it surface in chrome://extensions → Errors as well.
+addEventListener("unhandledrejection", () => {
+  void diagRepo(chromeLocalArea(), () => systemClock.now())
+    .append("E_UNHANDLED_REJECTION")
+    .catch(() => undefined);
 });
 
 const boot = createBoot({
