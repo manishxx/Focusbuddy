@@ -17,6 +17,10 @@ export interface NotificationsPort {
   /** Creates or replaces the notification with this id. */
   create(id: string, content: { title: string; message: string }): Promise<void>;
   clear(id: string): Promise<void>;
+  /** True if a notification with this id is currently shown (review F5). */
+  exists(id: string): Promise<boolean>;
+  /** Ids of every notification this extension currently shows (review F6). */
+  listIds(): Promise<string[]>;
 }
 
 export interface ActionPort {

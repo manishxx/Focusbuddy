@@ -10,10 +10,15 @@
  * - Effects run in order; each failure becomes a diag code and the rest still run.
  * - A corrupt session.active is ended (stale_pause, no summary) before any input
  *   is applied to it (DATA_MODEL §8).
+ * - An ENDING session.active is finished (summary + purge + remove) before any input
+ *   is applied (D-023, review F3), so a failed summary write never leaves the user stuck.
+ * - Startup gets the notification state from the port (AC-32 start repeat, leftover
+ *   fb.* notifications); `idle` events are back-dated by idleThresholdSec (D-023, F7).
  */
 import { defaultPreferences } from "../../core/storage/defaults";
 import {
   buildSnapshot,
+  notificationIds,
   reduceSession,
   snapshotKey,
   type Effect,
@@ -49,6 +54,12 @@ export type EngineOptions = {
   newId: () => string;
   /** Start-up notices (openStorage), shown in every snapshot of this wake. */
   notices?: readonly Notice[];
+  /**
+   * Storage opened in safe mode (DATA_MODEL §5): session.* / break.* reply storage_error
+   * with no state change, and Startup ends any session (stale_pause, no summary).
+   * prefs.get and diag.get (run()) keep working.
+   */
+  safeMode?: boolean;
   /** The reducer; tests inject one to drive effects the Day 07 reducer never emits. */
   reduce?: typeof reduceSession;
 };
@@ -218,9 +229,27 @@ export function createEngine(options: EngineOptions): Engine {
     }
   }
 
-  async function step(state: ActiveState | null, hadRecord: boolean, input: SessionInput): Promise<EngineReply> {
+  /** Startup reads what the reducer can't: which notifications are showing. */
+  async function withNotificationState(state: ActiveState | null, input: SessionInput): Promise<SessionInput> {
+    if (input.kind !== "startup" || input.corrupt === true) return input;
+    if (state === null) {
+      const ids = await ports.notifications.listIds().catch((): string[] => []);
+      return { ...input, shownNotificationIds: ids };
+    }
+    if (state.session.state !== "ACTIVE") return input;
+    // Unknown counts as shown: never risk a duplicate.
+    const shown = await ports.notifications.exists(notificationIds(state.session.id).start).catch(() => true);
+    return { ...input, startShown: shown };
+  }
+
+  async function step(state: ActiveState | null, hadRecord: boolean, raw: SessionInput): Promise<EngineReply> {
     const now = clock.now();
     const prefs = await readPrefs(repos.prefs);
+    // Chrome reports "idle" only after idleThresholdSec without input: back-date it to
+    // the last real input (the reducer clamps it to attentionSince / startedAt).
+    const backdated: SessionInput =
+      raw.kind === "idle" && raw.state === "idle" ? { ...raw, at: raw.at - prefs.idleThresholdSec * 1_000 } : raw;
+    const input = await withNotificationState(state, backdated);
     let result: ReduceResult;
     try {
       result = reduce(state, input, {
@@ -242,7 +271,10 @@ export function createEngine(options: EngineOptions): Engine {
     return { ok: true, ...(result.data !== undefined && { data: result.data }) };
   }
 
-  async function process(input: SessionInput): Promise<EngineReply> {
+  async function process(original: SessionInput): Promise<EngineReply> {
+    if (options.safeMode === true && original.kind === "command") return { ok: false, error: "storage_error" };
+    const input: SessionInput =
+      options.safeMode === true && original.kind === "startup" ? { ...original, safeMode: true } : original;
     if (input.kind === "startup") await seedFromSnapshot();
     let read;
     try {
@@ -256,6 +288,19 @@ export function createEngine(options: EngineOptions): Engine {
       const ended = await step(null, true, { kind: "startup", corrupt: true });
       if (input.kind === "startup" || !ended.ok) return ended;
       return step(null, false, input);
+    }
+    if ("state" in read && read.state.session.state === "ENDING" && input.kind !== "startup") {
+      // Finish the ending first, then apply the input to what is left.
+      await step(read.state, true, { kind: "startup" });
+      let again;
+      try {
+        again = await repos.active.get();
+      } catch (error) {
+        if (!isDeleted(error)) await appendDiag(repos.diag, [errorCode(error, "E_ACTIVE_READ")]);
+        return { ok: false, error: "storage_error" };
+      }
+      if ("state" in again) return step(again.state, true, input); // still ENDING: stop → ok, others invalid
+      return process(input); // gone (or corrupt): handled as usual, no ENDING loop
     }
     return "state" in read ? step(read.state, true, input) : step(null, false, input);
   }

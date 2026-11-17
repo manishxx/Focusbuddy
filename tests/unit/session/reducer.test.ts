@@ -104,18 +104,31 @@ describe("row: none + session.start", () => {
   it.each([
     ["missing draft", {}],
     ["unknown key", { draft: draft({ title: "x" }) }],
-    ["empty task label", { draft: draft({ taskLabel: "" }) }],
-    ["plannedMin too small", { draft: draft({ plannedMin: 4 }) }],
-    ["plannedMin too large", { draft: draft({ plannedMin: 481 }) }],
     ["bad mode", { draft: draft({ mode: "chaos" }) }],
     ["www host", { draft: draft({ allowedHosts: ["www.example.com"] }) }],
-    ["keyword over 60", { draft: draft({ keywords: ["k".repeat(61)] }) }],
+    ["plannedMin a string", { draft: draft({ plannedMin: "60" }) }],
     ["extra payload key", { draft: draft(), x: 1 }],
     ["not an object", "start"],
     ["getter", Object.defineProperty({}, "draft", { get: () => draft(), enumerable: true })],
   ])("guard: invalid draft (%s) → invalid_message, nothing changes", (_name, payload) => {
     const r = run(null, cmd("session.start", payload), T0);
     expect(r).toEqual({ state: null, effects: [], error: "invalid_message" });
+  });
+
+  it.each([
+    ["empty task label", { draft: draft({ taskLabel: "" }) }],
+    ["task label too long", { draft: draft({ taskLabel: "t".repeat(121) }) }],
+    ["plannedMin too small", { draft: draft({ plannedMin: 4 }) }],
+    ["plannedMin too large", { draft: draft({ plannedMin: 481 }) }],
+    ["plannedMin not an integer", { draft: draft({ plannedMin: 30.5 }) }],
+    ["keyword over 60", { draft: draft({ keywords: ["k".repeat(61)] }) }],
+    ["too many keywords", { draft: draft({ keywords: Array.from({ length: 41 }, () => "k") }) }],
+  ])("guard: out-of-range draft value (%s) → invalid_argument (F9)", (_name, payload) => {
+    expect(run(null, cmd("session.start", payload), T0)).toEqual({
+      state: null,
+      effects: [],
+      error: "invalid_argument",
+    });
   });
 
   it("guard: a bad injected id → internal", () => {
@@ -232,8 +245,10 @@ describe("row: ACTIVE + break.start", () => {
     expect(st.session.breakEndsAt).toBe(T0 + 60 * MIN);
   });
   it("guards: minutes 1–60; only from ACTIVE", () => {
-    for (const m of [0, 61, 1.5, "5"])
-      expect(run(started(), cmd("break.start", { minutes: m }), T0).error).toBe("invalid_message");
+    for (const m of [0, 61, 1.5])
+      expect(run(started(), cmd("break.start", { minutes: m }), T0).error).toBe("invalid_argument");
+    for (const p of [{ minutes: "5" }, { minutes: Number.NaN }, {}, { minutes: 5, x: 1 }, null])
+      expect(run(started(), cmd("break.start", p), T0).error).toBe("invalid_message");
     expect(run(paused(), cmd("break.start", { minutes: 5 }), T0 + 11 * MIN).error).toBe("invalid_state");
     expect(run(onBreak(), cmd("break.start", { minutes: 5 }), T0 + 11 * MIN).error).toBe("invalid_state");
     expect(run(null, cmd("break.start", { minutes: 5 }), T0).error).toBe("invalid_state");
@@ -337,7 +352,9 @@ describe("row: ON_BREAK + break.extend", () => {
     );
   });
   it("guards: minutes 1–15; only ON_BREAK", () => {
-    expect(run(onBreak(), cmd("break.extend", { minutes: 16 }), T0 + 11 * MIN).error).toBe("invalid_message");
+    expect(run(onBreak(), cmd("break.extend", { minutes: 16 }), T0 + 11 * MIN).error).toBe("invalid_argument");
+    expect(run(onBreak(), cmd("break.extend", { minutes: 0 }), T0 + 11 * MIN).error).toBe("invalid_argument");
+    expect(run(onBreak(), cmd("break.extend", { mins: 5 }), T0 + 11 * MIN).error).toBe("invalid_message");
     expect(run(started(), cmd("break.extend", { minutes: 5 }), T0).error).toBe("invalid_state");
   });
 });
@@ -373,10 +390,11 @@ describe("row: ACTIVE / PAUSED / ON_BREAK + session.extend", () => {
     expect(p.data).toEqual({ cappedAt: T0 + 480 * MIN });
     expect(scheduled(p.effects, "fb.sessionEnd")).toBeUndefined();
   });
-  it("guard: minutes outside 5–120 → invalid_message; no session → invalid_state", () => {
+  it("guard: minutes outside 5–120 → invalid_argument; wrong type → invalid_message; no session → invalid_state", () => {
     const big = started(T0, { plannedMin: 400 });
-    expect(run(big, cmd("session.extend", { minutes: 4 }), T0).error).toBe("invalid_message");
-    expect(run(big, cmd("session.extend", { minutes: 121 }), T0).error).toBe("invalid_message");
+    expect(run(big, cmd("session.extend", { minutes: 4 }), T0).error).toBe("invalid_argument");
+    expect(run(big, cmd("session.extend", { minutes: 121 }), T0).error).toBe("invalid_argument");
+    expect(run(big, cmd("session.extend", { minutes: "10" }), T0).error).toBe("invalid_message");
     expect(run(null, cmd("session.extend", { minutes: 5 }), T0).error).toBe("invalid_state");
   });
 });
@@ -390,8 +408,11 @@ describe("row: ACTIVE / PAUSED / ON_BREAK + session.updateNote", () => {
     expect(r.effects).toEqual([{ type: "PublishSnapshot" }]);
   });
   it("guards: length caps, unknown keys, no session", () => {
-    expect(run(started(), cmd("session.updateNote", { objective: "x".repeat(301) }), T0).error).toBe("invalid_message");
-    expect(run(started(), cmd("session.updateNote", { nextStep: "x".repeat(501) }), T0).error).toBe("invalid_message");
+    expect(run(started(), cmd("session.updateNote", { objective: "x".repeat(301) }), T0).error).toBe(
+      "invalid_argument",
+    );
+    expect(run(started(), cmd("session.updateNote", { nextStep: "x".repeat(501) }), T0).error).toBe("invalid_argument");
+    expect(run(started(), cmd("session.updateNote", { nextStep: 5 }), T0).error).toBe("invalid_message");
     expect(run(started(), cmd("session.updateNote", { taskLabel: "x" }), T0).error).toBe("invalid_message");
     expect(run(null, cmd("session.updateNote", {}), T0).error).toBe("invalid_state");
   });
@@ -438,10 +459,10 @@ describe("row: ACTIVE / PAUSED / ON_BREAK + session.stop → ENDING user_stop", 
     const st = valid(run(onBreak(), cmd("session.stop"), T0 + 15 * MIN));
     expect(st.session.pauses).toEqual([{ from: T0 + 10 * MIN, to: T0 + 15 * MIN, kind: "break" }]);
   });
-  it("no session → ok, nothing to do (idempotent); ENDING → invalid_state", () => {
+  it("no session → ok, nothing to do (idempotent); ENDING: stop → ok (F3), others → invalid_state", () => {
     expect(run(null, cmd("session.stop"), T0)).toEqual({ state: null, effects: [] });
     const ending = valid(run(started(), cmd("session.stop"), T0 + MIN));
-    expect(run(ending, cmd("session.stop"), T0 + 2 * MIN)).toMatchObject({ state: ending, error: "invalid_state" });
+    expect(run(ending, cmd("session.stop"), T0 + 2 * MIN)).toEqual({ state: ending, effects: [] });
     expect(run(ending, cmd("session.pause"), T0 + 2 * MIN).error).toBe("invalid_state");
   });
 });
@@ -624,5 +645,40 @@ describe("other inputs", () => {
   });
   it("unknown command type with a valid payload → internal (router never sends one)", () => {
     expect(run(started(), cmd("session.bogus"), T0).error).toBe("internal");
+  });
+});
+
+describe("review F10: generic notifications and tooltips carry no task text", () => {
+  const TEXT = ["Write report", "Finish the draft", "Outline section 2"];
+  it("every generic ShowNotification / SetActionTitle along a full lifecycle", () => {
+    const g = { privateNotifications: true };
+    const steps: ReturnType<typeof run>[] = [];
+    let st: ActiveState | null = null;
+    const go = (input: Parameters<typeof run>[1], at: number) => {
+      const r = run(st, input, at, g);
+      steps.push(r);
+      st = r.state;
+    };
+    go(cmd("session.start", { draft: draft() }), T0);
+    go(cmd("session.pause"), T0 + MIN);
+    go(cmd("session.resume"), T0 + 2 * MIN);
+    go(cmd("break.start", { minutes: 5 }), T0 + 3 * MIN);
+    go({ kind: "alarm", name: "fb.breakEnd" }, T0 + 8 * MIN);
+    go({ kind: "alarm", name: "fb.breakPrompt" }, T0 + 13 * MIN);
+    go(cmd("break.end"), T0 + 14 * MIN);
+    go({ kind: "idle", state: "locked", at: T0 + 15 * MIN }, T0 + 15 * MIN);
+    go({ kind: "tick" }, T0 + 26 * MIN);
+    go({ kind: "idle", state: "active", at: T0 + 27 * MIN }, T0 + 27 * MIN);
+    go({ kind: "startup" }, T0 + 28 * MIN);
+    const fx = steps.flatMap((r) => r.effects);
+    const generic = fx.filter((e) => e.type === "ShowNotification" || e.type === "SetActionTitle");
+    expect(fx.filter((e) => e.type === "ShowNotification").length).toBeGreaterThanOrEqual(4);
+    for (const e of generic) {
+      if (e.type === "ShowNotification") expect(e.generic).toBe(true);
+      const vars = JSON.stringify(e.vars);
+      for (const t of TEXT) expect(vars).not.toContain(t);
+      expect(Object.keys(e.vars)).not.toEqual(expect.arrayContaining(["task"]));
+      expect(Object.keys(e.vars).some((k) => ["task", "objective", "nextStep"].includes(k))).toBe(false);
+    }
   });
 });

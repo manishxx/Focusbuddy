@@ -16,6 +16,7 @@ export default defineConfig({
         "src/shell/engine/**/*.ts",
         "src/shell/messaging/**/*.ts",
         "src/shell/adapters/chromeVersion.ts",
+        "src/shell/boot.ts",
       ],
       exclude: ["src/core/**/*.json"],
       reporter: [["text", { skipFull: false }], "text-summary"],

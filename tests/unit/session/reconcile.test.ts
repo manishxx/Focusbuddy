@@ -1,5 +1,6 @@
 // Reconciliation (Startup input), ARCHITECTURE §4 and §5.1.1 "Reconciliation (Day 07 scope)".
 import { describe, expect, it } from "vitest";
+import { buildSessionRecord } from "../../../src/core/session/summary";
 import type { Effect } from "../../../src/core/session/types";
 import type { ActiveState } from "../../../src/core/types";
 import {
@@ -186,5 +187,60 @@ describe("Startup: ON_BREAK", () => {
     const over = valid(run(onBreak(), { kind: "alarm", name: "fb.breakEnd" }, T0 + 20 * MIN));
     const rep = valid(run(over, { kind: "alarm", name: "fb.breakPrompt" }, T0 + 25 * MIN));
     expect(alarmsScheduled(run(rep, startup, T0 + 26 * MIN).effects)).toEqual(["fb.stalePause"]);
+  });
+});
+
+describe("D-023 review F4: no double counting of a gap while IDLE/LOCKED", () => {
+  it("locked at 10, closed 12→17, tick at 21 → awayMin 11 (not 16)", () => {
+    let st = started(T0, { plannedMin: 120 });
+    st = valid(run(st, { kind: "idle", state: "locked", at: T0 + 10 * MIN }, T0 + 10 * MIN));
+    st = { ...st, lastSeenAt: T0 + 12 * MIN }; // a tick refreshed lastSeenAt, then Chrome closed
+    const boot = run(st, startup, T0 + 17 * MIN);
+    const afterBoot = valid(boot);
+    expect(afterBoot.awayMs).toBe(0);
+    expect(afterBoot.session.state).toBe("ACTIVE"); // locked 7 min: not yet 10
+    const paused = valid(run(afterBoot, { kind: "tick" }, T0 + 21 * MIN));
+    expect(paused.session.pauses).toEqual([{ from: T0 + 10 * MIN, kind: "auto_absent" }]);
+    const ended = valid(run(paused, cmd("session.stop"), T0 + 21 * MIN));
+    const rec = buildSessionRecord(ended, "user_stop", T0 + 21 * MIN);
+    expect(rec.summary.awayMin).toBe(11);
+    expect(rec.actualMin).toBe(10);
+    expect(rec.actualMin + rec.summary.awayMin).toBeLessThanOrEqual(21 + 1);
+  });
+
+  it("locked ≥ 10 min by Startup → auto-pause from attentionSince right away, no awayMs", () => {
+    let st = started(T0, { plannedMin: 120 });
+    st = valid(run(st, { kind: "idle", state: "locked", at: T0 + 10 * MIN }, T0 + 10 * MIN));
+    st = { ...st, lastSeenAt: T0 + 12 * MIN };
+    const r = run(st, startup, T0 + 40 * MIN);
+    const next = valid(r);
+    expect(next.awayMs).toBe(0);
+    expect(next.session).toMatchObject({ state: "PAUSED", awaitingContinue: true, awaySince: T0 + 10 * MIN });
+    expect(next.session.pauses).toEqual([{ from: T0 + 10 * MIN, kind: "auto_absent" }]);
+    expect(notifications(r.effects)).toEqual([]); // the prompt waits for IdleChanged{active}
+  });
+
+  it("a gap counted in awayMs resets attention, so a back-dated idle event can't reach into it", () => {
+    const st = { ...started(), lastSeenAt: T0 + 10 * MIN };
+    const back = valid(run(st, startup, T0 + 15 * MIN));
+    expect(back.attentionSince).toBe(T0 + 15 * MIN);
+    const idle = valid(run(back, { kind: "idle", state: "idle", at: T0 + 11 * MIN }, T0 + 16 * MIN));
+    expect(idle.attentionSince).toBe(T0 + 15 * MIN);
+  });
+});
+
+describe("Startup in safe mode (DATA_MODEL §5)", () => {
+  it("ends any session with no summary and clears its alarms, notifications and badge", () => {
+    const r = run(started(), { kind: "startup", safeMode: true }, T0 + MIN);
+    expect(r.state).toBeNull();
+    expect(r.effects[0]).toEqual({ type: "Diag", code: "E_SAFE_MODE_SESSION_ENDED" });
+    expect(summaries(r.effects)).toEqual([]);
+    expect(alarmsCleared(r.effects)).toHaveLength(5);
+    expect(r.effects.filter((e) => e.type === "ClearNotification")).toHaveLength(3);
+    expect(badge(r.effects)).toEqual({ type: "SetBadge", text: "" });
+    expect(notifications(r.effects)).toEqual([]);
+  });
+  it("no session: same as a normal Startup", () => {
+    expect(run(null, { kind: "startup", safeMode: true }, T0)).toEqual(run(null, { kind: "startup" }, T0));
   });
 });

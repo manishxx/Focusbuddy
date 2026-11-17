@@ -61,7 +61,7 @@ export type RouterDeps = {
   runtimeId: string;
   /** chrome.runtime.getURL */
   getURL: (path: string) => string;
-  /** Resolves once storage is open and the Startup input is queued. */
+  /** Resolves once storage is open and the Startup input is queued; rejects if it can't open. */
   engine: () => Promise<Engine>;
 };
 
@@ -105,17 +105,22 @@ export function createRouter(deps: RouterDeps): { handle(message: unknown, sende
     ...(data !== undefined && { data }),
   });
 
+  /** null when storage couldn't be opened (D-023: the reply is storage_error). */
+  const engineOrNull = (): Promise<Engine | null> => deps.engine().catch(() => null);
+
   async function dispatch(env: Envelope): Promise<Reply> {
     const { id, type, payload } = env;
     if (isSessionCommand(type)) {
-      const engine = await deps.engine();
+      const engine = await engineOrNull();
+      if (engine === null) return err(id, "storage_error");
       const r = await engine.enqueue({ kind: "command", command: { type, payload } });
       if (r.ok) return { id, ok: true, ...(r.data !== undefined && { data: r.data }) };
       return err(id, r.error, r.data);
     }
     if (type === "prefs.get" || type === "diag.get") {
       if (!isEmptyObject(payload)) return err(id, "invalid_message");
-      const engine = await deps.engine();
+      const engine = await engineOrNull();
+      if (engine === null) return err(id, "storage_error");
       if (type === "prefs.get") {
         const { prefs } = await engine.run((repos) => repos.prefs.get());
         return { id, ok: true, data: { prefs } };

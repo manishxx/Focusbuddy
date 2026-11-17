@@ -198,7 +198,7 @@ stateDiagram-v2
 | ACTIVE / PAUSED / ON_BREAK | `session.updateNote` | lengths valid | unchanged | — |
 | ACTIVE | alarm `fb.sessionEnd` or any input with `remainingMs = 0` | — | ENDING `time_up` | see ENDING |
 | ACTIVE / PAUSED / ON_BREAK | `session.stop` | — | ENDING `user_stop` | see ENDING |
-| PAUSED | alarm `fb.stalePause` or any input with an open pause > 4 h | — | ENDING `stale_pause` | — |
+| PAUSED | alarm `fb.stalePause` or any input with an open pause ≥ 4 h | — | ENDING `stale_pause` | — |
 | ACTIVE | `IdleChanged {state, at}` | — | ACTIVE | `attention`, `attentionSince = at` (the event's own time) |
 | ACTIVE | `Tick` / `IdleChanged` | attention LOCKED ≥ 10 min, or IDLE ≥ 30 min (from `attentionSince`) | PAUSED | open pause `{from: attentionSince, kind: "auto_absent"}` (the absence itself isn't counted as session time); `awaitingContinue = true`; `awaySince = attentionSince`; badge `II`; no notification yet |
 | PAUSED · awaitingContinue | `IdleChanged {active}` | — | PAUSED | show the "Continue your session?" notification once (`continue.*`); snapshot |
@@ -225,6 +225,16 @@ stateDiagram-v2
 - **Ticks.** A tick that changes nothing refreshes `lastSeenAt` only when it is ≥ 60 s old (§7 amended), so the browser-closed gap stays accurate.
 - **Summary purge.** Summary building deletes segments only. Interventions are aggregate data and are kept with their SessionRecord (DATA_MODEL §1).
 - **Alarm persistence.** `persistAcrossSessions: true` is passed when the Chrome major version is ≥ 150 (SD-1).
+
+**Decisions from the Day 07 review (D-023):**
+- **ENDING is retried on every input**, not only at Startup. A failed summary write can't leave the user stuck; `session.stop` on ENDING replies `ok`.
+- **Idle events are back-dated.** Chrome reports `idle` only after `idleThresholdSec`, so the input's time is `now − idleThresholdSec`. The 30-minute rule then counts from the last real input.
+- **No double counting.** When Startup finds attention IDLE or LOCKED, the browser-closed gap isn't added to `awayMs`; the auto-pause from `attentionSince` already covers it. Invariant (property-tested): active + away + break + pause time never exceeds the wall clock.
+- **Start notification after a crash (AC-32).** At Startup, an ACTIVE session younger than 60 s whose start notification isn't showing gets it once more.
+- **Leftover notifications.** At Startup with no session, every `fb.*` notification is cleared.
+- **Boot failure.** If storage can't open, commands reply `storage_error`, a `safe_mode` or `storage_error` notice is published, and initialisation is retried on the next input.
+- **Thresholds are inclusive (≥)** for 10 min, 30 min and 4 h.
+- **Boot marker.** `diag.boot {seq, at}` in `storage.session` is written on every SW evaluation (no user data). The restart e2e uses it to prove a real restart.
 
 **Effect idempotence:**
 - Notification ids are deterministic (`fb.start.<sessionId>`, `fb.continue.<sessionId>`, `fb.break.<sessionId>`).

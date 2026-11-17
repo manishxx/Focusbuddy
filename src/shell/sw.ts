@@ -2,19 +2,23 @@
  * Service worker entry (ARCHITECTURE §2–§4). All listeners are registered
  * synchronously at the top level so Chrome can wake the worker for them.
  *
- * Start order on every evaluation: hardening → openStorage (migrations, raw purge,
- * retention) → engine → Startup reconciliation, which is always the FIRST input.
- * Alarms, idle changes and messages that arrive earlier wait for the engine and
- * queue behind Startup.
+ * Start order on every evaluation: boot marker; hardening → openStorage (migrations,
+ * raw purge, retention) → engine → Startup reconciliation, which is always the FIRST
+ * input (src/shell/boot.ts). Alarms, idle changes and messages that arrive earlier
+ * wait for the engine and queue behind Startup. If storage can't open, commands reply
+ * storage_error and the next input retries initialisation.
  */
 import { systemClock } from "../core/clock";
 import type { SessionInput } from "../core/session";
 import { chromeEffectPorts } from "./adapters/chrome";
 import { supportsPersistAcrossSessions } from "./adapters/chromeVersion";
-import { createEngine, type Engine, type EngineReply } from "./engine/engine";
+import { createBoot, writeBootMarker } from "./boot";
+import { createEngine, type EngineReply } from "./engine/engine";
+import { kvSnapshotPort } from "./engine/snapshotPort";
 import { harden, isHardened, type HardeningApi } from "./hardening";
 import { createRouter, type Reply } from "./messaging/router";
 import { chromeLocalArea, chromeSessionArea } from "./storage/kv";
+import { diagRepo } from "./storage/kvRepos";
 import { openStorage } from "./storage/openStorage";
 
 // Explicit wrappers: chrome APIs are only ever called directly (lint rule fb/chrome-access).
@@ -50,45 +54,58 @@ function setIdleInterval(seconds: number): void {
   }
 }
 
-async function startEngine(): Promise<Engine> {
-  await readyHardened;
-  const local = chromeLocalArea();
-  const opened = await openStorage({
-    local,
-    session: chromeSessionArea(),
-    idbFactory: indexedDB,
-    now: () => systemClock.now(),
-  });
-  try {
-    setIdleInterval((await opened.repos.prefs.get()).prefs.idleThresholdSec);
-  } catch {
-    setIdleInterval(300);
-  }
-  const engine = createEngine({
-    repos: opened.repos,
-    ports: chromeEffectPorts({ persistAcrossSessions: supportsPersistAcrossSessions(navigator.userAgent) }),
-    clock: systemClock,
-    newId: () => crypto.randomUUID(),
-    notices: opened.notices,
-  });
-  // Synchronously, before anyone else can see the engine: Startup is the first input.
-  void engine.enqueue({ kind: "startup" });
-  return engine;
-}
+// Review F2: a per-evaluation boot marker (no user data).
+void writeBootMarker(chromeSessionArea(), systemClock.now()).catch(() => undefined);
 
-const engineReady: Promise<Engine> = startEngine();
+// Review F11: nothing may end up as an unhandled rejection (chrome://extensions → Errors).
+addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  event.preventDefault();
+});
+
+const boot = createBoot({
+  init: async () => {
+    await readyHardened;
+    const opened = await openStorage({
+      local: chromeLocalArea(),
+      session: chromeSessionArea(),
+      idbFactory: indexedDB,
+      now: () => systemClock.now(),
+    });
+    try {
+      setIdleInterval((await opened.repos.prefs.get()).prefs.idleThresholdSec);
+    } catch {
+      setIdleInterval(300);
+    }
+    return opened;
+  },
+  makeEngine: (opened) =>
+    createEngine({
+      repos: opened.repos,
+      ports: chromeEffectPorts({ persistAcrossSessions: supportsPersistAcrossSessions(navigator.userAgent) }),
+      clock: systemClock,
+      newId: () => crypto.randomUUID(),
+      notices: opened.notices,
+      safeMode: opened.mode === "safe",
+    }),
+  snapshot: kvSnapshotPort(chromeSessionArea()),
+  recordDiag: (code) => diagRepo(chromeLocalArea(), () => systemClock.now()).append(code),
+  now: () => systemClock.now(),
+});
+
+// Start initialising now; failures are retried by the next input.
+void boot.engine().catch(() => undefined);
 
 function submit(input: SessionInput): Promise<EngineReply> {
-  return engineReady.then(
+  return boot.engine().then(
     (engine) => engine.enqueue(input),
-    (): EngineReply => ({ ok: false, error: "internal" }),
+    (): EngineReply => ({ ok: false, error: "storage_error" }),
   );
 }
 
 const router = createRouter({
   runtimeId: chrome.runtime.id,
   getURL: (path) => chrome.runtime.getURL(path),
-  engine: () => engineReady,
+  engine: () => boot.engine(),
 });
 
 chrome.runtime.onInstalled.addListener(() => {

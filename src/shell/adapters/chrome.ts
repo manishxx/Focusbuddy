@@ -34,6 +34,8 @@ export const chromeNotifications: NotificationsPort = {
   clear: async (id) => {
     await chrome.notifications.clear(id);
   },
+  exists: async (id) => Object.hasOwn(await chrome.notifications.getAll(), id),
+  listIds: async () => Object.keys(await chrome.notifications.getAll()),
 };
 
 export const chromeAction: ActionPort = {

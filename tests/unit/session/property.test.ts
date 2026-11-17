@@ -3,7 +3,8 @@
 // Seeded PRNG, so a failure is reproducible from the printed seed.
 import { describe, expect, it } from "vitest";
 import { reduceSession } from "../../../src/core/session/reducer";
-import { endsAt, openPause, remainingMs, totalMs } from "../../../src/core/session/time";
+import { buildSessionRecord } from "../../../src/core/session/summary";
+import { elapsedMs, endsAt, openPause, pausedMs, remainingMs, totalMs } from "../../../src/core/session/time";
 import type { Effect, SessionInput } from "../../../src/core/session/types";
 import { validateActiveState } from "../../../src/core/storage/validate";
 import type { ActiveState } from "../../../src/core/types";
@@ -32,6 +33,8 @@ function simulate(seed: number, steps: number): void {
   let ids = 0;
   const alarms = new Map<string, Alarm>();
   const shown = new Map<string, number>();
+  // Browser-closed gaps added to awayMs, as intervals (review F4: never overlap a pause).
+  let gaps: Array<{ from: number; to: number }> = [];
   const applyAlarms = (fx: Effect[]) => {
     for (const e of fx) {
       if (e.type === "ScheduleAlarm")
@@ -48,7 +51,8 @@ function simulate(seed: number, steps: number): void {
     const r = rnd();
     if (state === null && r < 0.5)
       input = cmd("session.start", { draft: draft({ plannedMin: pick([5, 30, 60, 240, 480]) }) });
-    else if (r < 0.55) input = { kind: "startup" };
+    else if (r < 0.55)
+      input = { kind: "startup", startShown: rnd() < 0.5, shownNotificationIds: ["fb.start.old", "x"] };
     else if (r < 0.65) input = { kind: "tick" };
     else if (r < 0.75)
       input = { kind: "idle", state: pick(["active", "idle", "locked"] as const), at: now - Math.floor(rnd() * MIN) };
@@ -69,9 +73,10 @@ function simulate(seed: number, steps: number): void {
       ]);
     }
     const before = state;
+    const privateNotifications = rnd() < 0.3;
     const res = reduceSession(state, input, {
       now,
-      privateNotifications: rnd() < 0.3,
+      privateNotifications,
       defaultMode: "gentle",
       newId: () => `id${++ids}`,
     });
@@ -83,12 +88,35 @@ function simulate(seed: number, steps: number): void {
     }
     state = res.state;
     applyAlarms(res.effects);
+    // Review F10: generic (private) text never carries the task, objective or next step.
+    for (const e of res.effects) {
+      if (e.type !== "ShowNotification" && e.type !== "SetActionTitle") continue;
+      if (e.type === "ShowNotification") expect(e.generic, where).toBe(privateNotifications);
+      if (!privateNotifications) continue;
+      expect(
+        Object.keys(e.vars).filter((k) => ["task", "objective", "nextStep"].includes(k)),
+        where,
+      ).toEqual([]);
+      const text = JSON.stringify(e.vars);
+      for (const t of ["Write report", "Finish the draft", "Outline section 2"]) expect(text, where).not.toContain(t);
+    }
+    if (before !== null && state !== null && state.session.id === before.session.id && state.awayMs > before.awayMs) {
+      gaps.push({ from: before.lastSeenAt, to: before.lastSeenAt + (state.awayMs - before.awayMs) });
+    }
+    if (state === null || before === null || state.session.id !== before.session.id) {
+      if (state === null || before?.session.id !== state.session.id) gaps = [];
+    }
     for (const e of res.effects) {
       if (e.type === "ShowNotification") {
         // At most once per occurrence: never re-shown while its notified.* time is set.
         const key = `${e.id}:${e.titleKey}`;
-        if (e.id.startsWith("fb.start.")) expect(shown.has(key), where).toBe(false);
-        shown.set(key, now);
+        // fb.start: once, plus at most one AC-32 repeat at a Startup within 60 s.
+        const count = (shown.get(key) ?? 0) + 1;
+        if (e.id.startsWith("fb.start.")) {
+          expect(count, where).toBeLessThanOrEqual(2);
+          if (count === 2) expect(input.kind, where).toBe("startup");
+        }
+        shown.set(key, count);
       }
     }
     if (state === null) {
@@ -104,6 +132,7 @@ function simulate(seed: number, steps: number): void {
     const s = state.session;
     seen.add(s.state);
     if (s.awaitingContinue === true) seen.add("awaitingContinue");
+    if (state.awayMs > 0) seen.add("awayMs");
     if (s.ending !== undefined) seen.add(`end:${s.ending.endReason}`);
     for (const e of res.effects) if (e.type === "ShowNotification") seen.add(`notify:${e.titleKey}`);
     expect(s.pauses.filter((p) => p.to === undefined).length, where).toBeLessThanOrEqual(1);
@@ -126,6 +155,32 @@ function simulate(seed: number, steps: number): void {
     if (s.state === "ON_BREAK") {
       expect(openPause(s)?.kind, where).toBe("break");
       expect(s.breakEndsAt, where).toBeDefined();
+    }
+    // Review F4: pauses and counted gaps never overlap, and time adds up to the wall clock.
+    const until = s.ending?.endedAt ?? now;
+    const intervals = [...s.pauses.map((p) => ({ from: p.from, to: p.to ?? Math.max(p.from, until) })), ...gaps].sort(
+      (x, y) => x.from - y.from,
+    );
+    for (let k = 1; k < intervals.length; k++) {
+      const prev = intervals[k - 1];
+      const cur = intervals[k];
+      if (prev && cur)
+        expect(cur.from, `${where} overlap ${JSON.stringify(intervals)}`).toBeGreaterThanOrEqual(prev.to);
+    }
+    const wall = until - s.startedAt;
+    expect(pausedMs(s, until) + elapsedMs(s, until), where).toBeLessThanOrEqual(wall);
+    expect(state.awayMs, where).toBeLessThanOrEqual(elapsedMs(s, until) + 1);
+    if (s.state === "ENDING" && s.ending !== undefined) {
+      // In minutes: session time (actualMin, which already contains awayMs: away counts as
+      // session time per D-022) + absence pauses + break + user pauses ≤ wall clock + 1
+      // (+1 more for the four independent roundings).
+      const rec = buildSessionRecord(state, s.ending.endReason, s.ending.endedAt);
+      const userPauseMin = Math.round(pausedMs(s, until, "pause") / MIN);
+      const absentPauseMin = Math.round(pausedMs(s, until, "auto_absent") / MIN);
+      expect(rec.actualMin + absentPauseMin + rec.summary.breakMin + userPauseMin, where).toBeLessThanOrEqual(
+        Math.round(wall / MIN) + 2,
+      );
+      expect(rec.summary.awayMin, where).toBeLessThanOrEqual(rec.actualMin + absentPauseMin + 1);
     }
     if (s.state === "ENDING") {
       expect(
@@ -150,6 +205,7 @@ describe("random sequences keep the invariants", () => {
       "ON_BREAK",
       "ENDING",
       "awaitingContinue",
+      "awayMs",
       "end:time_up",
       "end:user_stop",
       "end:stale_pause",

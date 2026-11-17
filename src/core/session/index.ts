@@ -1,5 +1,5 @@
 /** Session state machine (ARCHITECTURE §5.1, §5.1.1): pure reducer, time math, snapshot, summary. */
-export { reduceSession, ALARM_SLACK_MS } from "./reducer";
+export { reduceSession, ALARM_SLACK_MS, START_REPEAT_WINDOW_MS } from "./reducer";
 export { buildSnapshot, snapshotKey } from "./snapshot";
 export type { Notice, NoticeCode, SnapshotSession, UiSnapshot } from "./snapshot";
 export { buildSessionRecord } from "./summary";
@@ -19,4 +19,5 @@ export type {
   SessionCommandType,
   SessionDraft,
   SessionInput,
+  StartupInput,
 } from "./types";

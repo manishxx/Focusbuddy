@@ -64,8 +64,22 @@ export type SessionInput =
   | { kind: "alarm"; name: string }
   | { kind: "idle"; state: IdleStateName; at: number }
   | { kind: "tick" }
-  /** Reconciliation (§4, §5.1.1). `corrupt`: session.active exists but is invalid. */
-  | { kind: "startup"; corrupt?: boolean };
+  /** Reconciliation (§4, §5.1.1). */
+  | StartupInput;
+
+/**
+ * `corrupt`: session.active exists but is invalid. The engine reads the notification
+ * state for the reducer: `startShown` (is fb.start.<id> showing? undefined = unknown,
+ * treated as shown) and `shownNotificationIds` (every notification currently shown).
+ */
+export type StartupInput = {
+  kind: "startup";
+  corrupt?: boolean;
+  /** Storage is in safe mode (DATA_MODEL §5): monitoring is disabled, any session is ended. */
+  safeMode?: boolean;
+  startShown?: boolean;
+  shownNotificationIds?: readonly string[];
+};
 
 export type ReduceContext = {
   now: number;

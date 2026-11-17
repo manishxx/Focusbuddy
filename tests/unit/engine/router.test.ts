@@ -127,6 +127,11 @@ describe("dispatch (§3)", () => {
     expect(await router.handle(msg("break.extend", { minutes: 99 }), page())).toEqual({
       id: "req-1",
       ok: false,
+      error: "invalid_argument",
+    });
+    expect(await router.handle(msg("break.extend", { minutes: "9" }), page())).toEqual({
+      id: "req-1",
+      ok: false,
       error: "invalid_message",
     });
     expect(await router.handle(msg("session.stop"), page("intervention.html"))).toEqual({ id: "req-1", ok: true });
@@ -149,8 +154,19 @@ describe("dispatch (§3)", () => {
     }
     expect(await router.handle(msg("session.hack"), page())).toEqual({ id: "req-1", ok: false, error: "unknown_type" });
   });
-  it("an engine that fails to start → internal", async () => {
+  it("storage that can't open → storage_error, never internal (D-023)", async () => {
     const router = createRouter({ runtimeId: ID, getURL, engine: () => Promise.reject(new Error("no storage")) });
+    expect(await router.handle(msg("prefs.get"), page())).toEqual({ id: "req-1", ok: false, error: "storage_error" });
+    expect(await router.handle(msg("session.start", startDraft), page())).toEqual({
+      id: "req-1",
+      ok: false,
+      error: "storage_error",
+    });
+  });
+  it("an engine job that throws → internal", async () => {
+    const { engine } = await setup();
+    const broken = { ...engine, run: () => Promise.reject(new Error("bug")) };
+    const router = createRouter({ runtimeId: ID, getURL, engine: () => Promise.resolve(broken) });
     expect(await router.handle(msg("prefs.get"), page())).toEqual({ id: "req-1", ok: false, error: "internal" });
   });
 });

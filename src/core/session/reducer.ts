@@ -29,7 +29,15 @@ import {
   STALE_PAUSE_MS,
   TICK_PERIOD_MIN,
 } from "./time";
-import type { Effect, ErrorCode, ReduceContext, ReduceResult, SessionCommand, SessionInput } from "./types";
+import type {
+  Effect,
+  ErrorCode,
+  ReduceContext,
+  ReduceResult,
+  SessionCommand,
+  SessionInput,
+  StartupInput,
+} from "./types";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** An fb.sessionEnd alarm that fires this close to the end counts as "time up" (alarm rounding). */
@@ -205,7 +213,7 @@ function breakNotification(st: ActiveState, ctx: Ctx): Effect {
 function start(st: ActiveState | null, payload: unknown, ctx: Ctx): ReduceResult {
   if (st !== null) return fail(st, "invalid_state", { activeSessionId: st.session.id });
   const parsed = parseStartPayload(payload, ctx.defaultMode);
-  if (!parsed.ok) return fail(null, "invalid_message");
+  if (!parsed.ok) return fail(null, parsed.error);
   const id = ctx.newId();
   if (!ID.test(id)) return fail(null, "internal");
   const { config, plannedMin } = parsed.value;
@@ -229,14 +237,7 @@ function start(st: ActiveState | null, payload: unknown, ctx: Ctx): ReduceResult
     [
       { type: "ScheduleAlarm", name: "fb.sessionEnd", when: endsAt(next.session, at) },
       { type: "ScheduleAlarm", name: "fb.tick", periodMin: TICK_PERIOD_MIN },
-      {
-        type: "ShowNotification",
-        id: notificationIds(id).start,
-        titleKey: "start.title",
-        bodyKey: generic ? "start.body.generic" : "start.body",
-        vars: generic ? {} : { task: config.taskLabel, planned: { kind: "duration", ms: plannedMin * MINUTE_MS } },
-        generic,
-      },
+      startNotification(id, config.taskLabel, plannedMin, generic),
       ...show(next, ctx),
     ],
     { sessionId: id },
@@ -250,22 +251,22 @@ function command(st: ActiveState | null, cmd: SessionCommand, ctx: Ctx): ReduceR
   switch (cmd.type) {
     case "session.extend": {
       const m = parseMinutes(p, 5, 120);
-      if (!m.ok) return fail(st, "invalid_message");
+      if (!m.ok) return fail(st, m.error);
       return extend(st, m.value, ctx);
     }
     case "break.start": {
       const m = parseMinutes(p, 1, 60);
-      if (!m.ok) return fail(st, "invalid_message");
+      if (!m.ok) return fail(st, m.error);
       return breakStart(st, m.value, ctx);
     }
     case "break.extend": {
       const m = parseMinutes(p, 1, 15);
-      if (!m.ok) return fail(st, "invalid_message");
+      if (!m.ok) return fail(st, m.error);
       return breakExtend(st, m.value, ctx);
     }
     case "session.updateNote": {
       const n = parseNote(p);
-      if (!n.ok) return fail(st, "invalid_message");
+      if (!n.ok) return fail(st, n.error);
       if (st === null || st.session.state === "ENDING") return fail(st, "invalid_state");
       const auto = autoEnd(st, ctx);
       if (auto !== null) return auto;
@@ -276,7 +277,9 @@ function command(st: ActiveState | null, cmd: SessionCommand, ctx: Ctx): ReduceR
   }
   // Idempotent stop: nothing to stop is success (API_CONTRACTS §1 "idempotent where possible").
   if (st === null) return cmd.type === "session.stop" ? ok(null, []) : fail(null, "invalid_state");
-  if (st.session.state === "ENDING") return fail(st, "invalid_state");
+  // ENDING: the session is already ending, so stop succeeds (the engine retries the
+  // ending first, review F3); every other command is invalid.
+  if (st.session.state === "ENDING") return cmd.type === "session.stop" ? ok(st, []) : fail(st, "invalid_state");
   const auto = autoEnd(st, ctx);
   if (auto !== null) return auto;
   const s = st.session;
@@ -469,17 +472,40 @@ function idle(st: ActiveState | null, input: { state: string; at: number }, ctx:
 
 // ---- reconciliation (§4, §5.1.1 "Reconciliation (Day 07 scope)") ----
 
-function startup(st: ActiveState | null, corrupt: boolean, ctx: Ctx): ReduceResult {
-  if (corrupt) {
+function startup(st: ActiveState | null, input: StartupInput, ctx: Ctx): ReduceResult {
+  if (input.corrupt === true) {
     // DATA_MODEL §8: an invalid session.active is ended as stale_pause with no summary.
     // There is no readable session, so there is nothing to summarise; the engine removes it.
     return ok(null, [{ type: "Diag", code: "E_ACTIVE_CORRUPT_ENDED" }, ...clearAllAlarms(), ...show(null, ctx)]);
   }
-  if (st === null) return ok(null, [...clearAllAlarms(), ...show(null, ctx)]);
+  if (input.safeMode === true && st !== null) {
+    // DATA_MODEL §5: safe mode disables monitoring. A session found at boot is ended as
+    // stale_pause with no summary (aggregates can't be written); the engine removes
+    // session.active, and the start-up raw purge clears its segments.
+    const ids = notificationIds(st.session.id);
+    return ok(null, [
+      { type: "Diag", code: "E_SAFE_MODE_SESSION_ENDED" },
+      ...clearAllAlarms(),
+      { type: "ClearNotification", id: ids.start },
+      { type: "ClearNotification", id: ids.continue },
+      { type: "ClearNotification", id: ids.break },
+      ...show(null, ctx),
+    ]);
+  }
+  if (st === null) {
+    // Review F6: no session → no Focus Buddy notification may linger.
+    const leftovers: Effect[] = (input.shownNotificationIds ?? [])
+      .filter((id) => id.startsWith("fb."))
+      .map((id) => ({ type: "ClearNotification", id }));
+    return ok(null, [...clearAllAlarms(), ...leftovers, ...show(null, ctx)]);
+  }
   if (st.session.state === "ENDING") return ok(st, endingEffects(st));
   const s = st.session;
   const gap = ctx.at - st.lastSeenAt;
-  const away = s.state === "ACTIVE" && gap > AWAY_GAP_MS;
+  // D-023 (review F4): with attention IDLE/LOCKED the gap is not added to awayMs; the
+  // auto-pause from attentionSince covers it, so the same time is never counted twice.
+  const attentive = st.attention === "ACTIVE_INPUT" || st.attention === "BROWSER_UNFOCUSED";
+  const away = s.state === "ACTIVE" && attentive && gap > AWAY_GAP_MS;
   // D-022: the browser-closed gap counts as session time (BR-1) and goes into awayMs.
   // Expiry is checked with the gap included; only the part before the end is away time.
   const auto = autoEnd(st, ctx, "expired_while_closed");
@@ -488,9 +514,20 @@ function startup(st: ActiveState | null, corrupt: boolean, ctx: Ctx): ReduceResu
     const inSession = Math.max(0, auto.state.session.ending.endedAt - st.lastSeenAt);
     return { ...auto, state: { ...auto.state, awayMs: st.awayMs + inSession } };
   }
-  if (!away) return ok(st, [...alarmsFor(st, ctx.at), ...show(st, ctx)]);
-  const withAway: ActiveState = { ...st, awayMs: st.awayMs + gap, lastSeenAt: ctx.at };
-  if (gap < AWAY_AUTO_PAUSE_MS) return ok(withAway, [...alarmsFor(withAway, ctx.at), ...show(withAway, ctx)]);
+  if (s.state === "ACTIVE" && !attentive) {
+    const paused = maybeAutoPause(st, ctx);
+    if (paused !== null) return paused;
+  }
+  if (!away) return withStartRepeat(st, input, ctx);
+  // Attention restarts at now, so a later back-dated idle event can't reach into the gap.
+  const withAway: ActiveState = {
+    ...st,
+    awayMs: st.awayMs + gap,
+    lastSeenAt: ctx.at,
+    attention: "ACTIVE_INPUT",
+    attentionSince: ctx.at,
+  };
+  if (gap < AWAY_AUTO_PAUSE_MS) return withStartRepeat(withAway, input, ctx);
   // ≥ 10 min: auto-pause at now (D-016 anti-covert rule); the user is back, so the
   // continue prompt is shown once right away.
   const next: ActiveState = {
@@ -502,8 +539,6 @@ function startup(st: ActiveState | null, corrupt: boolean, ctx: Ctx): ReduceResu
       awaitingContinue: true,
       awaySince: st.lastSeenAt,
     },
-    attention: "ACTIVE_INPUT",
-    attentionSince: ctx.at,
     drift: onTask(ctx.at),
     notified: { ...st.notified, continuePrompt: ctx.at },
   };
@@ -521,6 +556,41 @@ function startup(st: ActiveState | null, corrupt: boolean, ctx: Ctx): ReduceResu
   ]);
 }
 
+/** Window after start in which a lost start notification is shown once more (AC-32). */
+export const START_REPEAT_WINDOW_MS = 60_000;
+
+/**
+ * Re-creates alarms and presentation. Review F5 (AC-32): an ACTIVE session younger
+ * than 60 s whose start notification isn't showing (a crash between persist and the
+ * effect) gets it once more. `notified.start` moves to now, so it happens only once.
+ */
+function withStartRepeat(st: ActiveState, input: StartupInput, ctx: Ctx): ReduceResult {
+  const s = st.session;
+  const fx: Effect[] = [...alarmsFor(st, ctx.at)];
+  let next = st;
+  if (
+    s.state === "ACTIVE" &&
+    input.startShown === false &&
+    ctx.at - s.startedAt <= START_REPEAT_WINDOW_MS &&
+    st.notified.start === s.startedAt
+  ) {
+    next = { ...st, lastSeenAt: ctx.at, notified: { ...st.notified, start: ctx.at } };
+    fx.push(startNotification(s.id, s.taskLabel, s.plannedMin, ctx.privateNotifications));
+  }
+  return ok(next, [...fx, ...show(next, ctx)]);
+}
+
+function startNotification(id: string, task: string, plannedMin: number, generic: boolean): Effect {
+  return {
+    type: "ShowNotification",
+    id: notificationIds(id).start,
+    titleKey: "start.title",
+    bodyKey: generic ? "start.body.generic" : "start.body",
+    vars: generic ? {} : { task, planned: { kind: "duration", ms: plannedMin * MINUTE_MS } },
+    generic,
+  };
+}
+
 export function reduceSession(state: ActiveState | null, input: SessionInput, context: ReduceContext): ReduceResult {
   // A clock that went backwards never moves session time backwards.
   const at = state === null ? context.now : Math.max(context.now, state.lastSeenAt);
@@ -535,6 +605,6 @@ export function reduceSession(state: ActiveState | null, input: SessionInput, co
     case "tick":
       return tick(state, ctx);
     case "startup":
-      return startup(state, input.corrupt === true, ctx);
+      return startup(state, input, ctx);
   }
 }

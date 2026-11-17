@@ -15,6 +15,8 @@
 | `active` | storage.local | `session.active` | **raw** (session life) | Deleted when the session ends |
 | `ui.snapshot` | storage.session | `ui.snapshot` | derived | Browser session |
 | `overlay.pending` | storage.session | `overlay.pending` | secret (nonce) | ≤ 2 min |
+| `diag.boot` | storage.session | `diag.boot` | diagnostic (`{seq, at}`, no user data; v1.3) | Browser session |
+| `diag.startupErrors` | storage.session | `diag.startupErrors` | diagnostic (error codes only) | Browser session |
 | `segments` | IndexedDB `fb` | `[sessionId, seq]` | **raw** (host only, never titles) | Deleted when the summary is committed |
 | `interventions` | IndexedDB `fb` | `[sessionId, id]` | aggregate (no hosts, no titles) | With its session |
 | `sessions` | IndexedDB `fb` | `id` | aggregate | `prefs.retentionDays` (default 30, 0–90; 0 = keep nothing) |

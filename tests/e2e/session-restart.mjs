@@ -95,7 +95,8 @@ function activeProblems(a, sessionId, state = "ACTIVE") {
   if (state === "PAUSED" && (s.pauses[0]?.kind !== "pause" || s.pauses[0]?.to !== undefined)) p.push("open pause");
   if (a?.awayMs !== 0) p.push("awayMs (no browser-closed gap expected)");
   if (!(a?.lastSeenAt >= s?.startedAt)) p.push("lastSeenAt < startedAt");
-  if (a?.attention !== "ACTIVE_INPUT") p.push("attention");
+  // Review F1: an idle machine (or headless CI) may report idle/locked; any valid value is fine.
+  if (!["ACTIVE_INPUT", "IDLE", "LOCKED", "BROWSER_UNFOCUSED"].includes(a?.attention)) p.push("attention");
   if (!(a?.attentionSince >= s?.startedAt)) p.push("attentionSince");
   if (typeof a?.notified?.start !== "number" || Object.keys(a?.notified ?? {}).some((k) => k !== "start"))
     p.push("notified");
@@ -157,6 +158,7 @@ try {
   // restart (seen on Chrome 157). So swState() evaluates in the SW through a raw CDP
   // session that is detached right after, and pageState() reads the same APIs from the page.
   const stateFn = async () => ({
+    idleState: await chrome.idle.queryState(300),
     notifications: Object.keys(await chrome.notifications.getAll()),
     badge: await chrome.action.getBadgeText({}),
     title: await chrome.action.getTitle({}),
@@ -181,14 +183,23 @@ try {
   /** Stops every SW, waits 3 s, wakes ours with prefs.get (queued behind Startup). */
   const cdp = await page.createCDPSession();
   await cdp.send("ServiceWorker.enable");
+  // Review F2: sw.ts writes diag.boot = {seq, at} on every evaluation.
+  const readBoot = () => page.evaluate(async () => (await chrome.storage.session.get("diag.boot"))["diag.boot"]);
   const restartSw = async () => {
+    const bootBefore = await readBoot();
+    const stopAt = Date.now();
     await cdp.send("ServiceWorker.stopAllWorkers");
     await sleep(500);
     const targetsAfterStop = browser.targets().filter(isSw).length;
     await sleep(2_500);
     const wake = await send("prefs.get", {});
-    return { targetsAfterStop, wake };
+    const bootAfter = await readBoot();
+    const boot = { before: bootBefore, after: bootAfter, stopAt };
+    summary.steps.boots = [...(summary.steps.boots ?? []), boot];
+    return { targetsAfterStop, wake, boot };
   };
+  const bootProof = (boot) =>
+    Number.isInteger(boot.before?.seq) && boot.after?.seq > boot.before.seq && boot.after?.at > boot.stopAt;
 
   // ---- 1. start ----
   const draft = {
@@ -221,6 +232,11 @@ try {
   const wake = restart1.wake;
   summary.steps.swTargetsAfterStop = restart1.targetsAfterStop;
   summary.steps.wake = { ok: wake?.ok, idleThresholdSec: wake?.data?.prefs?.idleThresholdSec };
+  check(
+    "boot marker: seq increased and stamped after the stop (real restart)",
+    bootProof(restart1.boot),
+    restart1.boot,
+  );
   check("prefs.get wakes the SW and replies ok", wake?.ok === true && wake?.data?.prefs?.schemaVersion === 1);
 
   // prefs.get is queued behind Startup, so reconciliation has finished when it replies.
@@ -246,6 +262,12 @@ try {
   );
   const active = await readActive();
   summary.steps.activeAfterRestart = active;
+  summary.steps.idleStateInSw = swAfter.idleState;
+  check(
+    "stored attention is consistent with chrome.idle in the SW",
+    swAfter.idleState === "active" ? true : ["ACTIVE_INPUT", "IDLE", "LOCKED"].includes(active?.attention),
+    { idleState: swAfter.idleState, attention: active?.attention },
+  );
   const problems = activeProblems(active, sessionId);
   check("session.active is valid (DATA_MODEL v1.3 shape)", problems.length === 0, problems);
   const idbActive = await readIdb();
@@ -275,6 +297,7 @@ try {
   const restart2 = await restartSw();
   summary.steps.restart2 = { targetsAfterStop: restart2.targetsAfterStop, wakeOk: restart2.wake?.ok };
   check("second restart: SW stopped and woke", restart2.targetsAfterStop === 0 && restart2.wake?.ok === true);
+  check("boot marker: seq increased again after the second stop", bootProof(restart2.boot), restart2.boot);
   const pausedAfter = await readSnapshot();
   summary.steps.snapshotPausedAfterRestart = pausedAfter;
   check("still PAUSED after the second restart", pausedAfter?.session?.state === "PAUSED");

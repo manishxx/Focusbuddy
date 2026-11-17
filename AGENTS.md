@@ -10,7 +10,7 @@ The Claude Code Agent tool can pick only the model *families* `opus`, `sonnet`,
 
 | Tier | Role | How it runs here |
 |---|---|---|
-| 1 | Principal Architect / orchestrator | Main session, Claude Opus 5.5 |
+| 1 | Principal Architect / orchestrator | Main session. Claude Opus 5.5 through Day 07 Session B; **Claude Fable 5.2 from Day 07 Session C**, after the owner changed the session model with `/model` on 2026-11-16 |
 | 2 | Implementer / independent reviewer | Subagent, `model: opus` (exact version unknown; may equal Tier 1 cost) |
 | 3 | Routine files, docs, formatting | Subagent, `model: sonnet`, or the orchestrator when delegating would cost more context than it saves |
 

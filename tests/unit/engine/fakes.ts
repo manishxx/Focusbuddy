@@ -42,6 +42,10 @@ export function fakePorts(log: string[] = []): FakePorts {
           ports.notifications.live.set(id, content);
         }),
       clear: (id) => step(`notify.clear:${id}`, () => ports.notifications.live.delete(id)),
+      exists: (id) =>
+        ports.broken ? Promise.reject(new Error("crash")) : Promise.resolve(ports.notifications.live.has(id)),
+      listIds: () =>
+        ports.broken ? Promise.reject(new Error("crash")) : Promise.resolve([...ports.notifications.live.keys()]),
     },
     action: {
       badge: "",
