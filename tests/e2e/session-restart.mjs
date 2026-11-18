@@ -212,8 +212,39 @@ try {
   const bootProof = (boot) =>
     Number.isInteger(boot.before?.seq) && boot.after?.seq > boot.before.seq && boot.after?.at > boot.stopAt;
 
-  // ---- 1. start ----
-  const draft = {
+  // ---- 0. parse.intent with the AC-01 reference sentence (Day 08) ----
+  // Pure and storage-free, so it runs before any session exists; the session below
+  // is then started from exactly the draft the parser returned.
+  const AC01 =
+    "I want to finish the first four chapters of Pattern Recognition today. I have three hours. " +
+    "I'll be using Claude, Google Classroom, Google Scholar, and YouTube. " +
+    "Help me stay focused and intervene when I get distracted.";
+  const beforeParse = await page.evaluate(async () => Object.keys(await chrome.storage.local.get(null)).sort());
+  const parseReply = await send("parse.intent", { text: AC01 });
+  summary.steps.parse = parseReply;
+  const parsed = parseReply?.data?.draft;
+  const afterParse = await page.evaluate(async () => Object.keys(await chrome.storage.local.get(null)).sort());
+  check("parse.intent replies ok", parseReply?.ok === true && !!parsed);
+  check("AC-01: plannedMin is 180", parsed?.plannedMin === 180);
+  check(
+    "AC-01: the four named sites are allowed",
+    ["claude.ai", "classroom.google.com", "scholar.google.com", "youtube.com"].every((h) =>
+      (parsed?.allowedHosts ?? []).includes(h),
+    ),
+    parsed?.allowedHosts,
+  );
+  check("AC-01: the task label is the subject (§8.1)", parsed?.taskLabel === "Pattern Recognition", parsed?.taskLabel);
+  check("AC-01: the objective keeps the goal", (parsed?.objective ?? "").includes("first four chapters"));
+  check("AC-01: keywords include the subject phrase", (parsed?.keywords ?? []).includes("pattern recognition"));
+  check("AC-01: no warnings", Array.isArray(parseReply?.data?.warnings) && parseReply.data.warnings.length === 0);
+  check("parse.intent stores nothing in storage.local", JSON.stringify(beforeParse) === JSON.stringify(afterParse), {
+    beforeParse,
+    afterParse,
+  });
+  check("parse.intent never echoes the sentence", !JSON.stringify(parseReply).includes("intervene when"));
+
+  // ---- 1. start, from the parsed draft ----
+  const draft = parsed ?? {
     taskLabel: "E2E restart check",
     objective: "Verify AC-02",
     allowedHosts: ["docs.example.com"],

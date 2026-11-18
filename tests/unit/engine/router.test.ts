@@ -149,10 +149,67 @@ describe("dispatch (§3)", () => {
   });
   it("other contract types → not_implemented; unknown types → unknown_type", async () => {
     const { router } = await setup();
-    for (const t of ["mute.set", "prefs.update", "data.deleteAll", "parse.intent"]) {
+    for (const t of ["mute.set", "prefs.update", "data.deleteAll"]) {
       expect(await router.handle(msg(t), page())).toEqual({ id: "req-1", ok: false, error: "not_implemented" });
     }
     expect(await router.handle(msg("session.hack"), page())).toEqual({ id: "req-1", ok: false, error: "unknown_type" });
+  });
+  it("parse.intent replies with a draft and warnings, and stores nothing (API_CONTRACTS §3)", async () => {
+    const { h, router } = await setup();
+    const before = h.local.keys().sort();
+    const reply = await router.handle(msg("parse.intent", { text: "Revise chemistry for 90 min on Quizlet" }), page());
+    expect(reply).toEqual({
+      id: "req-1",
+      ok: true,
+      data: {
+        draft: {
+          taskLabel: "Chemistry",
+          objective: "Revise chemistry on Quizlet",
+          allowedHosts: ["quizlet.com"],
+          keywords: ["chemistry", "quizlet"],
+          plannedMin: 90,
+          mode: "gentle",
+        },
+        warnings: [],
+      },
+    });
+    expect(h.local.keys().sort()).toEqual(before);
+  });
+  it("parse.intent uses the mode from preferences and the injected time zone", async () => {
+    const h = await harness();
+    const engine = engineFor(h, fakePorts());
+    await engine.enqueue({ kind: "startup" });
+    await h.repos.prefs.update({ defaultMode: "strict" });
+    const router = createRouter({
+      runtimeId: ID,
+      getURL,
+      engine: () => Promise.resolve(engine),
+      now: () => Date.UTC(2026, 10, 18, 9, 0, 0),
+      tzOffsetMin: () => 60,
+    });
+    const reply = await router.handle(msg("parse.intent", { text: "Write my essay until 5pm" }), page());
+    expect(reply).toMatchObject({ ok: true, data: { draft: { mode: "strict", plannedMin: 420 } } });
+  });
+  it.each<[string, unknown]>([
+    ["not an object", "x"],
+    ["missing text", {}],
+    ["wrong type", { text: 5 }],
+    ["unknown key", { text: "ok", extra: 1 }],
+  ])("parse.intent with %s → invalid_message", async (_n, payload) => {
+    const { router } = await setup();
+    expect(await router.handle(msg("parse.intent", payload), page())).toEqual({
+      id: "req-1",
+      ok: false,
+      error: "invalid_message",
+    });
+  });
+  it("parse.intent over 1000 characters → invalid_argument", async () => {
+    const { router } = await setup();
+    expect(await router.handle(msg("parse.intent", { text: "x".repeat(1001) }), page())).toEqual({
+      id: "req-1",
+      ok: false,
+      error: "invalid_argument",
+    });
   });
   it("storage that can't open → storage_error, never internal (D-023)", async () => {
     const router = createRouter({ runtimeId: ID, getURL, engine: () => Promise.reject(new Error("no storage")) });

@@ -6,10 +6,13 @@
  *   2. envelope validation (§1): exactly {v: 1, id, type, payload} (+ optional nonce),
  *      read from a plain-data snapshot; anything else → invalid_message.
  *   3. dispatch: session.* / break.* go to the engine; prefs.get and diag.get are
- *      queued reads. Other contract types → not_implemented; unknown → unknown_type.
+ *      queued reads; parse.intent runs the pure parser and stores nothing. Other
+ *      contract types → not_implemented; unknown → unknown_type.
  * Replies carry error codes only, never free text.
  */
+import { DEFAULT_PLANNED_MIN, parseIntent, SITES, TEXT_MAX } from "../../core/parser";
 import { SESSION_COMMAND_TYPES, type ErrorCode, type SessionCommandType } from "../../core/session";
+import { DEFAULT_PREFERENCES } from "../../core/storage/defaults";
 import { trySnapshot } from "../../core/storage/snapshot";
 import { isPlainObject } from "../../core/storage/validate";
 import type { Engine } from "../engine/engine";
@@ -63,6 +66,16 @@ export type RouterDeps = {
   getURL: (path: string) => string;
   /** Resolves once storage is open and the Startup input is queued; rejects if it can't open. */
   engine: () => Promise<Engine>;
+  /**
+   * Epoch ms for `parse.intent` (the parser is pure, so the shell reads the clock).
+   * Defaults to Date.now().
+   */
+  now?: () => number;
+  /**
+   * Minutes to add to UTC for local time, for clock targets ("until 5pm").
+   * Defaults to `-new Date().getTimezoneOffset()`; core never reads a time zone.
+   */
+  tzOffsetMin?: () => number;
 };
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -97,6 +110,18 @@ function parseEnvelope(message: unknown): { ok: true; value: Envelope } | { ok: 
 
 const isEmptyObject = (v: unknown): boolean => isPlainObject(v) && Object.keys(v).length === 0;
 
+/** API_CONTRACTS §3: `parse.intent` takes exactly `{text: string ≤ 1000}`. */
+export function parseIntentText(payload: unknown): { ok: true; text: string } | { ok: false; error: ErrorCode } {
+  const snap = trySnapshot(payload);
+  if (!snap.ok || !isPlainObject(snap.value)) return { ok: false, error: "invalid_message" };
+  const keys = Object.keys(snap.value);
+  if (keys.length !== 1 || keys[0] !== "text" || typeof snap.value.text !== "string") {
+    return { ok: false, error: "invalid_message" };
+  }
+  if (snap.value.text.length > TEXT_MAX) return { ok: false, error: "invalid_argument" };
+  return { ok: true, text: snap.value.text };
+}
+
 export function createRouter(deps: RouterDeps): { handle(message: unknown, sender: SenderInfo): Promise<Reply> } {
   const err = (id: string, error: ErrorCode, data?: unknown): Reply => ({
     id,
@@ -116,6 +141,24 @@ export function createRouter(deps: RouterDeps): { handle(message: unknown, sende
       const r = await engine.enqueue({ kind: "command", command: { type, payload } });
       if (r.ok) return { id, ok: true, ...(r.data !== undefined && { data: r.data }) };
       return err(id, r.error, r.data);
+    }
+    if (type === "parse.intent") {
+      const text = parseIntentText(payload);
+      if (!text.ok) return err(id, text.error);
+      // Pure and storage-free: it works in safe mode and when storage can't open.
+      // Preferences only supply the defaults, so a failed read falls back to them.
+      const engine = await engineOrNull();
+      const prefs = engine === null ? null : await engine.run((repos) => repos.prefs.get()).catch(() => null);
+      const result = parseIntent(text.text, {
+        now: (deps.now ?? (() => Date.now()))(),
+        tzOffsetMin: (deps.tzOffsetMin ?? (() => -new Date().getTimezoneOffset()))(),
+        defaults: {
+          plannedMin: DEFAULT_PLANNED_MIN,
+          mode: prefs?.prefs.defaultMode ?? DEFAULT_PREFERENCES.defaultMode,
+        },
+        sites: SITES,
+      });
+      return { id, ok: true, data: { draft: result.draft, warnings: result.warnings } };
     }
     if (type === "prefs.get" || type === "diag.get") {
       if (!isEmptyObject(payload)) return err(id, "invalid_message");

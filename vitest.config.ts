@@ -12,6 +12,7 @@ export default defineConfig({
       // covered by the e2e tests only.
       include: [
         "src/core/**/*.ts",
+        "src/core/parser/**/*.ts",
         "src/shell/storage/**/*.ts",
         "src/shell/engine/**/*.ts",
         "src/shell/messaging/**/*.ts",

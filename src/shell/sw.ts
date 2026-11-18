@@ -109,6 +109,9 @@ const router = createRouter({
   runtimeId: chrome.runtime.id,
   getURL: (path) => chrome.runtime.getURL(path),
   engine: () => boot.engine(),
+  now: () => systemClock.now(),
+  // Local time for "until 5pm": read here, never in the pure core (PARSER_SPEC §2).
+  tzOffsetMin: () => -new Date().getTimezoneOffset(),
 });
 
 chrome.runtime.onInstalled.addListener(() => {

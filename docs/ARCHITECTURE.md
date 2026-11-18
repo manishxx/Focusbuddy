@@ -5,7 +5,7 @@
 | Status | **v1.1 (Day 07, D-021).** v1.0 approved Day 03 after two independent reviews. v1.1 adds the §5.1.1 transition table and the Day 07 engine scope. Day 05 added the §13 results |
 | Owner | Principal Architect (Claude Opus 5.5) |
 | Inputs | [PRD](PRD.md) v1.0, [FEASIBILITY](FEASIBILITY.md) SD-1 to SD-11 |
-| Companion docs | [API_CONTRACTS](API_CONTRACTS.md) · [DATA_MODEL](DATA_MODEL.md) · [SECURITY](SECURITY.md) · [ADRs](DECISIONS/) |
+| Companion docs | [API_CONTRACTS](API_CONTRACTS.md) · [DATA_MODEL](DATA_MODEL.md) · [SECURITY](SECURITY.md) · [PARSER_SPEC](PARSER_SPEC.md) · [UX_GUIDELINES](UX_GUIDELINES.md) · [ADRs](DECISIONS/) |
 
 ---
 
@@ -252,6 +252,9 @@ The tabs adapter produces at most one `Observation` per *context change* of the 
 6. Placeholder detection: empty title, `about:blank`, a title equal to the URL without its scheme, or a bare site name → `placeholder: true` (SD-5).
 7. **Reduce for storage:** keep `host` only. Titles and paths are never stored (D-015). A `pathHint` (e.g. `youtube.com/watch`, `/search`) is used in memory by the classifier and discarded.
 8. Dedup: `obsKey = hash(tabId, host, normalisedTitle)`, compared with the persisted `current.obsKey`. Same key → drop. A per-tab rate limit (≥ 1 s) guards against title floods (SECURITY T11).
+
+### 5.2.1 Task parser (FR-T1 to T4)
+A pure function `parseIntent(text, ctx) → {draft, warnings}`, specified in full in [PARSER_SPEC.md](PARSER_SPEC.md) (Day 08, D-024). It never stores the sentence, never guesses silently (every guess raises a warning the form shows) and never calls AI in V1. The bundled site dictionary also carries the `mixedUse` flag that §5.3 step 8 needs.
 
 ### 5.3 Relevance classifier (FR-C1 to C7)
 A pure function: `classify(obs, sessionCtx, caches) → {class, confidence, reason}`.
