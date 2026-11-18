@@ -8,11 +8,12 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 import { parseIntent } from "../../../src/core/parser";
 import { LIMITS } from "../../../src/core/storage/validate";
-import { createRouter } from "../../../src/shell/messaging/router";
+import { createRouter, PREFS_WAIT_MS } from "../../../src/shell/messaging/router";
 import { openStorage } from "../../../src/shell/storage/openStorage";
 import { memoryKv } from "../../../src/shell/storage/memoryKv";
 import type { KvArea } from "../../../src/shell/storage/kv";
-import { createEngine } from "../../../src/shell/engine/engine";
+import { createEngine, type Engine } from "../../../src/shell/engine/engine";
+import { DEFAULT_PREFERENCES } from "../../../src/core/storage/defaults";
 import { createFakeClock } from "../../../src/core/clock";
 import { keyRange } from "../storage/fixtures";
 import { fakePorts, T0 } from "../engine/fakes";
@@ -141,6 +142,49 @@ describe("parse.intent stores nothing", () => {
     expect(data.draft.objective).toContain(SECRET);
     expect(JSON.stringify(data)).not.toContain("hunter2");
     h.close();
+  });
+
+  it("does not wait on storage: a slow engine falls back to the default mode (review F14)", async () => {
+    const id = "s".repeat(32);
+    // Models storage that never answers.
+    const stuck = new Promise<never>(() => undefined);
+    const router = createRouter({
+      runtimeId: id,
+      getURL: (p) => `chrome-extension://${id}/${p}`,
+      engine: () => stuck,
+      now: () => T0,
+      tzOffsetMin: () => 60,
+    });
+    const started = Date.now();
+    const reply = await router.handle(
+      { v: 1, id: "req-3", type: "parse.intent", payload: { text: "revise chemistry for 1 hour" } },
+      { id, url: `chrome-extension://${id}/sidepanel.html` },
+    );
+    expect(reply).toMatchObject({ id: "req-3", ok: true });
+    expect((reply as { data: { draft: { mode: string } } }).data.draft.mode).toBe(DEFAULT_PREFERENCES.defaultMode);
+    // It answered without waiting for storage (the timeout is PREFS_WAIT_MS).
+    expect(Date.now() - started).toBeLessThan(PREFS_WAIT_MS * 10);
+  });
+
+  it("falls back when the preferences read itself hangs", async () => {
+    const id = "t".repeat(32);
+    const engine = {
+      enqueue: () => Promise.reject(new Error("not used")),
+      run: () => new Promise<never>(() => undefined),
+    };
+    const router = createRouter({
+      runtimeId: id,
+      getURL: (p) => `chrome-extension://${id}/${p}`,
+      engine: () => Promise.resolve(engine as unknown as Engine),
+      now: () => T0,
+      tzOffsetMin: () => 60,
+    });
+    const reply = await router.handle(
+      { v: 1, id: "req-4", type: "parse.intent", payload: { text: "revise chemistry for 1 hour" } },
+      { id, url: `chrome-extension://${id}/sidepanel.html` },
+    );
+    expect(reply).toMatchObject({ id: "req-4", ok: true });
+    expect((reply as { data: { draft: { mode: string } } }).data.draft.mode).toBe(DEFAULT_PREFERENCES.defaultMode);
   });
 
   it("works when storage cannot be opened at all (safe mode, no prefs)", async () => {

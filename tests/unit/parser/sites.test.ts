@@ -5,6 +5,7 @@ import {
   SENSITIVE_HOSTS,
   buildLookup,
   hasKnownTld,
+  isIpv4,
   findSites,
   isSensitiveHost,
   mixedUseFor,
@@ -159,9 +160,13 @@ describe("matching (§5)", () => {
       expect(hasKnownTld(host), host).toBe(true);
     }
     for (const host of ["node.js", "wibble.zzz", "thing.notatld"]) expect(hasKnownTld(host), host).toBe(false);
-    // IPv4 still passes: the Day 06 rules check it in full.
-    expect(hasKnownTld("127.0.0.1")).toBe(true);
-    expect(hasKnownTld("999.1.1.1")).toBe(false);
+    // IPv4 is matched on its own (review F9), not through the TLD list.
+    expect(hasKnownTld("127.0.0.1")).toBe(false);
+    expect(isIpv4("127.0.0.1")).toBe(true);
+    expect(isIpv4("192.168.1.1")).toBe(true);
+    expect(isIpv4("999.999.999.999")).toBe(false);
+    expect(isIpv4("1.2.3")).toBe(false);
+    expect(isIpv4("example.com")).toBe(false);
   });
 
   it("§5.1: an unknown TLD warns instead of inventing a host", () => {
@@ -177,6 +182,59 @@ describe("matching (§5)", () => {
     for (const host of [...SITES.map((s) => s.host), ...SENSITIVE_HOSTS]) {
       expect(COMMON_TLDS.has(host.slice(host.lastIndexOf(".") + 1)), host).toBe(true);
     }
+  });
+
+  it("§5.2: an ordinary English word is not a site name (review F5)", () => {
+    for (const [text, word] of [
+      ["work on medium difficulty problems", "medium"],
+      ["zoom in on the diagram", "zoom"],
+      ["a scholar of history", "scholar"],
+      ["read the classroom notes", "classroom"],
+      ["read wiki articles", "wiki"],
+      ["khan was a general", "khan"],
+      ["post an insta story", "insta"],
+    ] as const) {
+      expect(hostsIn(text), text).toEqual([]);
+      expect(
+        lookup.names.some((n) => n.name === word),
+        word,
+      ).toBe(false);
+    }
+    // The unambiguous forms still work.
+    expect(hostsIn("read medium.com and google scholar and wikipedia")).toEqual([
+      "medium.com",
+      "scholar.google.com",
+      "wikipedia.org",
+    ]);
+    expect(hostsIn("join the call on zoom.us with google classroom and khan academy")).toEqual([
+      "zoom.us",
+      "classroom.google.com",
+      "khanacademy.org",
+    ]);
+  });
+
+  it("§5.1: an email address is not a site, and a port is refused (review F8)", () => {
+    const email = findSites("email a@b.com for help", lookup, []);
+    expect(email.hosts).toEqual([]);
+    expect(email.unrecognised).toEqual([]);
+    const port = findSites("open example.com:8080", lookup, []);
+    expect(port.hosts).toEqual([]);
+    expect(port.unrecognised).toEqual(["example.com"]);
+  });
+
+  it("§5.1: an IPv4 literal is a host, out-of-range octets are not (review F9)", () => {
+    expect(hostsIn("open 192.168.1.1 now")).toEqual(["192.168.1.1"]);
+    const bad = findSites("open 999.999.999.999 now", lookup, []);
+    expect(bad.hosts).toEqual([]);
+    expect(bad.unrecognised).toEqual(["999.999.999.999"]);
+  });
+
+  it("reports where the sensitive names were, for the keyword sources (review F17)", () => {
+    const found = findSites("study on mychart and quizlet", lookup, []);
+    expect(found.hosts).toEqual(["quizlet.com"]);
+    expect(found.sensitiveSpans).toHaveLength(1);
+    const span = found.sensitiveSpans[0];
+    expect("study on mychart and quizlet".slice(span?.start, span?.end)).toBe("mychart");
   });
 
   it("normaliseHost strips www and a trailing dot", () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildKeywords,
   isWeakKeyword,
+  isWeakPhrase,
   buildLabel,
   findObjective,
   KEYWORDS_MAX,
@@ -189,8 +190,19 @@ describe("task label (§8, §8.1)", () => {
     expect(label("I have . I'll be using , , and .", "Finish the chapters", "Chapters").label).toBe("Chapters");
   });
 
-  it("keeps a fragment that says something", () => {
-    expect(label("I have a lab report").label).toBe("I have a lab report");
+  it("keeps a fragment that says something, without the dangling words (§8.1 step 4)", () => {
+    expect(label("I have a lab report on enzymes").label).toBe("Lab report on enzymes");
+    expect(label("Can I study maths").label).toBe("Study maths");
+    expect(label("And then write notes").label).toBe("Write notes");
+  });
+
+  it("never returns a label made only of function words, numbers or time words", () => {
+    for (const leftover of ["Can I", "Actually", "For 9999 hours", "then", "and", "the"]) {
+      expect(label(leftover, "", null, "").label, leftover).toBe("Focus session");
+    }
+    // A content word survives; only what dangles around it goes.
+    expect(label("Check then").label).toBe("Check");
+    expect(label("For chemistry").label).toBe("Chemistry");
   });
 
   it("caps at the validator limit on a word boundary", () => {
@@ -236,6 +248,58 @@ describe("keywords (§9, §9.1)", () => {
       "treaty of westphalia",
     );
     expect(subjectPhrase("Revise the organic chemistry notes")).toBe("organic chemistry notes");
+  });
+
+  it("rejects a phrase whose first or last token is weak (§9.2, review F3)", () => {
+    for (const phrase of [
+      "for the biology exam",
+      "in strict mode",
+      "and write",
+      "chapter 5 page 9",
+      "how to code",
+      "guitar every",
+      "the news",
+      "dr. smith's ph.d",
+    ]) {
+      expect(isWeakPhrase(phrase), phrase).toBe(true);
+    }
+    for (const phrase of ["pattern recognition", "biology exam", "treaty of westphalia", "lab report"]) {
+      expect(isWeakPhrase(phrase), phrase).toBe(false);
+    }
+  });
+
+  it("blocks generic web and filler single words (§9.2, review F4)", () => {
+    for (const word of [
+      "com",
+      "www",
+      "http",
+      "page",
+      "home",
+      "site",
+      "website",
+      "web",
+      "online",
+      "news",
+      "video",
+      "videos",
+      "work",
+      "thing",
+      "things",
+      "stuff",
+      "focus",
+      "why",
+      "how",
+      "what",
+      "5pm",
+      "17:00",
+      "1e9",
+      "1h30",
+    ]) {
+      expect(isWeakKeyword(word), word).toBe(true);
+    }
+    for (const word of ["chemistry", "enzymes", "recognition", "thesis", "guitar"]) {
+      expect(isWeakKeyword(word), word).toBe(false);
+    }
   });
 
   it("never takes a keyword from a dropped filler phrase or a discarded clause (§9.1)", () => {

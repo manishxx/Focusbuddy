@@ -67,7 +67,7 @@
     "parse.siteSensitiveSkipped": "We left out a private site. You can add any site here by hand.",
     "parse.siteUnrecognised": "One word looked like a web address, but we couldn't use it. Add the site by hand.",
     "parse.sitesTruncated": "A session can hold 50 sites, so we kept the first 50.",
-    "parse.objectiveMissing": "What will be done by the end? A goal helps us word your check-ins.",
+    "parse.objectiveMissing": "What do you want done by the end? A goal helps us word your check-ins.",
     "parse.objectiveTruncated": "Your goal was long, so we shortened it. Edit it if you like.",
     "parse.labelTruncated": "The task name was long, so we shortened it. Edit it if you like.",
     "parse.labelFallback": "We weren't sure what to call this task. Give it a name that suits you.",

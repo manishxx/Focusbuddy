@@ -15,6 +15,7 @@ import { SESSION_COMMAND_TYPES, type ErrorCode, type SessionCommandType } from "
 import { DEFAULT_PREFERENCES } from "../../core/storage/defaults";
 import { trySnapshot } from "../../core/storage/snapshot";
 import { isPlainObject } from "../../core/storage/validate";
+import type { Mode } from "../../core/types";
 import type { Engine } from "../engine/engine";
 
 export const EXTENSION_PAGES = ["sidepanel.html", "options.html", "intervention.html"] as const;
@@ -78,6 +79,9 @@ export type RouterDeps = {
   tzOffsetMin?: () => number;
 };
 
+/** How long parse.intent waits for preferences before using the defaults (review F14). */
+export const PREFS_WAIT_MS = 300;
+
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const TYPE = /^[a-z][A-Za-z]{0,30}\.[a-z][A-Za-z]{0,30}$/;
 const ENVELOPE_REQUIRED = ["v", "id", "type", "payload"];
@@ -133,6 +137,31 @@ export function createRouter(deps: RouterDeps): { handle(message: unknown, sende
   /** null when storage couldn't be opened (D-023: the reply is storage_error). */
   const engineOrNull = (): Promise<Engine | null> => deps.engine().catch(() => null);
 
+  /**
+   * The preferred mode for parse.intent, or null to use the built-in default. Racing a
+   * timer keeps a pure command from waiting on storage (review F14).
+   */
+  async function defaultModeSource(): Promise<Mode | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), PREFS_WAIT_MS);
+    });
+    try {
+      const engine = await Promise.race([engineOrNull(), expired]);
+      if (engine === null) return null;
+      const read = await Promise.race([
+        engine
+          .run((repos) => repos.prefs.get())
+          .then((r) => r.prefs.defaultMode)
+          .catch(() => null),
+        expired,
+      ]);
+      return read;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   async function dispatch(env: Envelope): Promise<Reply> {
     const { id, type, payload } = env;
     if (isSessionCommand(type)) {
@@ -145,16 +174,17 @@ export function createRouter(deps: RouterDeps): { handle(message: unknown, sende
     if (type === "parse.intent") {
       const text = parseIntentText(payload);
       if (!text.ok) return err(id, text.error);
-      // Pure and storage-free: it works in safe mode and when storage can't open.
-      // Preferences only supply the defaults, so a failed read falls back to them.
-      const engine = await engineOrNull();
-      const prefs = engine === null ? null : await engine.run((repos) => repos.prefs.get()).catch(() => null);
+      // The parser itself touches no storage, so this command reads nothing and writes
+      // nothing. Preferences supply one value, the default mode: if storage is in safe
+      // mode, cannot open, or does not answer within PREFS_WAIT_MS, the built-in
+      // defaults are used and the reply is still a draft (review F14).
+      const prefs = await defaultModeSource();
       const result = parseIntent(text.text, {
         now: (deps.now ?? (() => Date.now()))(),
         tzOffsetMin: (deps.tzOffsetMin ?? (() => -new Date().getTimezoneOffset()))(),
         defaults: {
           plannedMin: DEFAULT_PLANNED_MIN,
-          mode: prefs?.prefs.defaultMode ?? DEFAULT_PREFERENCES.defaultMode,
+          mode: prefs ?? DEFAULT_PREFERENCES.defaultMode,
         },
         sites: SITES,
       });

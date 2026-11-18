@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseIntent, TEXT_MAX } from "../../../src/core/parser";
+import { WARNING_NAMES_MAX, WARNING_VALUE_MAX } from "../../../src/core/parser/types";
 import { LIMITS, validateSessionConfig } from "../../../src/core/storage/validate";
 import { FIXTURES } from "./fixtures";
 import { ctx } from "./helpers";
@@ -94,13 +95,18 @@ function check(text: string, now: number, tzOffsetMin: number, seed: number): vo
   const fields = warnings.map((w) => w.field);
   expect(new Set(fields).size, `seed ${seed}: ${fields.join()}`).toBe(fields.length);
 
-  const normalised = text.trim();
   for (const w of warnings) {
-    for (const value of [w.data?.value ?? "", ...(w.data?.names ?? [])]) {
-      expect(value.length, `seed ${seed}`).toBeLessThanOrEqual(24);
-      if (normalised.length > 24) expect(value).not.toBe(normalised);
+    const names = w.data?.names ?? [];
+    expect(names.length, `seed ${seed}`).toBeLessThanOrEqual(WARNING_NAMES_MAX);
+    for (const value of [w.data?.value ?? "", ...names]) {
+      // No warning ever carries more than a short slice of the sentence.
+      expect(value.length, `seed ${seed}`).toBeLessThanOrEqual(WARNING_VALUE_MAX);
+      if (value.length > 0 && text.includes(value)) {
+        expect(value.length, `seed ${seed}: "${value}"`).toBeLessThanOrEqual(WARNING_VALUE_MAX);
+      }
     }
     expect(w.data?.minutes === undefined || Number.isFinite(w.data.minutes)).toBe(true);
+    expect(w.data?.count === undefined || Number.isInteger(w.data.count)).toBe(true);
   }
 }
 

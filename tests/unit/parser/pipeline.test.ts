@@ -14,8 +14,9 @@ import {
   type WarningCode,
 } from "../../../src/core/parser";
 import { hasMessage } from "../../../src/core/messages";
+import type { Mode } from "../../../src/core/types";
 import bank from "../../../src/core/messages/messages.json";
-import { LIMITS } from "../../../src/core/storage/validate";
+import { LIMITS, validateSessionConfig } from "../../../src/core/storage/validate";
 import { ctx } from "./helpers";
 
 const codes = (text: string, over = {}) => parseIntent(text, ctx(over)).warnings.map((w) => w.code);
@@ -84,10 +85,16 @@ describe("one warning per field, by §11 precedence", () => {
 
 describe("clamps (§10, BR-5)", () => {
   it("clamps below 5 and above 480 minutes", () => {
-    expect(parseIntent("review it for 2 minutes", ctx()).draft.plannedMin).toBe(LIMITS.plannedMinMin);
-    expect(codes("review it for 2 minutes")).toEqual(["duration_clamped_min"]);
-    expect(parseIntent("review it for 12 hours", ctx()).draft.plannedMin).toBe(LIMITS.plannedMinMax);
-    expect(codes("review it for 12 hours")).toEqual(["duration_clamped_max"]);
+    expect(parseIntent("review the chemistry notes for 2 minutes", ctx()).draft.plannedMin).toBe(LIMITS.plannedMinMin);
+    expect(codes("review the chemistry notes for 2 minutes")).toEqual(["duration_clamped_min"]);
+    expect(parseIntent("review the chemistry notes for 12 hours", ctx()).draft.plannedMin).toBe(LIMITS.plannedMinMax);
+    expect(codes("review the chemistry notes for 12 hours")).toEqual(["duration_clamped_max"]);
+    // review F11: an absurd magnitude is matched and clamped, never left in the label.
+    expect(parseIntent("review the chemistry notes for 9999 hours", ctx()).draft).toMatchObject({
+      plannedMin: LIMITS.plannedMinMax,
+      taskLabel: "Chemistry notes",
+    });
+    expect(codes("review the chemistry notes for 9999 hours")).toEqual(["duration_clamped_max"]);
   });
 
   it("uses the injected default when nothing is found, without a clamp warning", () => {
@@ -156,6 +163,49 @@ describe("the pipeline never returns an invalid draft (§10)", () => {
     // The safe draft discards every field the other warnings describe, so parse_failed
     // is the only warning returned (§10).
     expect(warnings.map((w) => w.code)).toEqual(["parse_failed"]);
+  });
+
+  it("uses a hard-coded safe mode, so a bad ctx cannot produce an invalid draft (review F7)", () => {
+    const broken = [{ host: "NOT A HOST", names: ["brokensite"], mixedUse: false }];
+    const bad = { ...ctx({ sites: broken }), defaults: { plannedMin: 60, mode: "nope" as unknown as Mode } };
+    const { draft, warnings } = parseIntent("study on brokensite for 1 hour", bad);
+    expect(draft.mode).toBe("gentle");
+    expect(warnings.map((w) => w.code)).toEqual(["parse_failed"]);
+    const { plannedMin, mode, ...config } = draft;
+    expect(validateSessionConfig({ ...config, mode })).toMatchObject({ ok: true });
+    expect(plannedMin).toBe(60);
+  });
+
+  it("a bad default mode never reaches a valid draft either", () => {
+    const bad = { ...ctx(), defaults: { plannedMin: 60, mode: "nope" as unknown as Mode } };
+    const { draft } = parseIntent("revise chemistry for 1 hour", bad);
+    // The mode is validated with the rest of the draft, so an invalid one takes the
+    // safe-draft path rather than being returned.
+    expect(draft.mode).toBe("gentle");
+    expect(draft.taskLabel).toBe("Focus session");
+  });
+
+  it("counts what it dropped (review F12)", () => {
+    const names = SITES.flatMap((s) => s.names[0] ?? []);
+    const sites = parseIntent(`study for 1 hour on ${names.join(", ")}`, ctx()).warnings.find(
+      (w) => w.code === "sites_truncated",
+    );
+    expect(sites?.data?.count).toBe(SITES.length);
+    const many = Array.from({ length: 20 }, (_, i) => `topic${i}aa`).join(" ");
+    const keywords = parseIntent(`revise ${many} for 1 hour`, ctx()).warnings.find(
+      (w) => w.code === "keywords_truncated",
+    );
+    expect(keywords?.data?.count).toBe(12);
+  });
+
+  it("truncates text longer than 1,000 characters when called directly (M24)", () => {
+    const tail = "zzzpickle";
+    const text = `revise chemistry ${"x".repeat(1000)} ${tail}`;
+    const { draft } = parseIntent(text, ctx());
+    expect(JSON.stringify(draft)).not.toContain(tail);
+    expect(draft.taskLabel.length).toBeLessThanOrEqual(LIMITS.taskLabel);
+    // The cut is at 1,000 characters, so a duration past the cut is not read.
+    expect(parseIntent(`${"x".repeat(1000)} for 2 hours`, ctx()).draft.plannedMin).toBe(60);
   });
 
   it("handles text longer than the envelope limit without throwing", () => {

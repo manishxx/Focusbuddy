@@ -43,9 +43,12 @@ export const NUMBER_WORDS: Readonly<Record<string, number>> = Object.freeze({
 const INT_WORDS = Object.keys(NUMBER_WORDS)
   .sort((a, b) => b.length - a.length)
   .join("|");
-/** Hours also accept "a"/"an" ("an hour"). */
-const HOUR_NUM = `(?:${INT_WORDS}|an|a|\\d{1,3})`;
-const MIN_NUM = `(?:${INT_WORDS}|\\d{1,4})`;
+/**
+ * Hours also accept "a"/"an" ("an hour"). Up to nine digits: an absurd magnitude is
+ * matched and then clamped by §10, never left to leak into the label (review F11).
+ */
+const HOUR_NUM = `(?:${INT_WORDS}|an|a|\\d{1,9})`;
+const MIN_NUM = `(?:${INT_WORDS}|\\d{1,9})`;
 const H_UNIT = "(?:hours|hour|hrs|hr|h)";
 const M_UNIT = "(?:minutes|minute|mins|min|m)";
 

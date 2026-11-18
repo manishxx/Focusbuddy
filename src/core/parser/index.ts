@@ -7,15 +7,28 @@ export {
   parseIntent,
   pickWarnings,
 } from "./parseIntent";
-export { COMMON_TLDS, SITES, buildLookup, findSites, hasKnownTld, normaliseHost } from "./sites";
+export { COMMON_TLDS, SITES, buildLookup, findSites, hasKnownTld, isIpv4, normaliseHost } from "./sites";
 export { SENSITIVE_HOSTS, SENSITIVE_SITES, isSensitiveHost } from "../exclusions/sensitive";
 export type { SensitiveSite } from "../exclusions/sensitive";
 export { MS_PER_MIN, NUMBER_WORDS, clockTarget, findDuration } from "./duration";
 export { TRIGGER_VERBS, findObjective } from "./objective";
 export { LEADING_FILLER, TRAILING_FILLER, buildLabel } from "./label";
-export { KEYWORDS_MAX, STOP_WORDS, buildKeywords, isWeakKeyword, subjectPhrase } from "./keywords";
+export {
+  GENERIC_WORDS,
+  KEYWORDS_MAX,
+  STOP_WORDS,
+  buildKeywords,
+  isWeakKeyword,
+  isWeakPhrase,
+  subjectPhrase,
+} from "./keywords";
 export {
   DETERMINERS,
+  FUNCTION_WORDS,
+  QUESTION_WORDS,
+  isAllFunctionWords,
+  isNumericToken,
+  stripFunctionWords,
   QUANTITY_WORDS,
   SUBORDINATORS,
   TIME_WORDS,

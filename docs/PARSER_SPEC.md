@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **v1.1, Day 08 (D-024, D-025).** v1.1 adds §4.1, §5.1, §8.1 and §9.1 after implementation probing. Independent review in Session C |
+| Status | **v1.2, Day 08 (D-024 to D-026).** v1.2 applies the independent review: §5.2, §7, §8.1, §9.2, §10 |
 | Implements | PRD FR-T1–T4, BR-5, AC-01; UX_GUIDELINES F2; API_CONTRACTS `parse.intent` |
 | Module | `src/core/parser/` (pure: no `chrome`, no DOM, no clock, no network, no AI) |
 | Output | `{ draft: SessionDraft, warnings: ParseWarning[] }`, shown in an editable form before Start (FR-T2) |
@@ -88,6 +88,7 @@ Number words are supported for one to twelve, plus `fifteen`, `twenty`, `thirty`
 - `12pm` = 12:00 and `12am` = 00:00 (so `until 12am` has already passed today; `until midnight` = 24:00 has not).
 - Conflict resolution, made precise: the first match **that carries a value** sets `plannedMin`. If the very first match is a clock target that has passed → `until_passed`. If no match carries a value → `duration_missing`. Otherwise, if more than one match was found → `duration_conflict`, listing at most three ignored forms, each ≤ 24 characters.
 - A duration span absorbs up to three preceding lead words (`for`, `the`, `next`, `about`, `around`, `in`, `of`, `within`, `roughly`, `maybe`, `over`).
+- Durations with absurd magnitudes are matched and then clamped by §10 (`for 9999 hours` → 480 with `duration_clamped_max`), never left to leak into the label (review F11).
 - `ParseCtx.defaults.plannedMin` is the constant **60** (`DEFAULT_PLANNED_MIN`). `Preferences` has no default-length field in V1, and adding one would be a DATA_MODEL change.
 
 ## 5. Sites → `allowedHosts` (FR-T3)
@@ -111,6 +112,10 @@ type SiteEntry = {
 - **Communication (allowed only if the user names it):** Slack, Zoom, Google Meet, Teams, Discord\*
 - **Mixed-use media:** YouTube\*, Reddit\*, Twitch\*, Medium\*, Substack\*, X/Twitter\*, LinkedIn\*, Instagram\*, TikTok\*, Facebook\*, Netflix\*, Spotify\*
 
+### 5.2 Names must not be ordinary words (D-026, review F5)
+
+A spoken name is only in the dictionary if it is unambiguous in a study sentence. Single words that are ordinary English (`medium`, `zoom`, `scholar`, `classroom`, `wiki`, `khan`, `insta`, `linear`, `teams`, `meet`, `indeed`, `chase`, `x`) are **not** names; those sites stay reachable through their unambiguous forms (`medium.com`, `zoom.us`, `google scholar`, `google classroom`, `wikipedia`). A wrong host is worse than a missing one, which the user can add (FR-T4).
+
 A name matches only on a **word boundary**. Longer names are matched first, so "google scholar" wins over "google". `mixedUse` is part of the dictionary because the classifier (Day 11) needs it; the parser only copies the host.
 
 **Bare domains** in the sentence (`example.com`, `docs.example.com/x`) are accepted: the host is extracted and normalised, the path dropped. Anything that fails the Day 06 host rules is ignored with the warning `site_unrecognised`.
@@ -123,7 +128,7 @@ A name matches only on a **word boundary**. Longer names are matched first, so "
 
 ### 5.1 Bare-domain safety (D-025)
 
-A bare domain is accepted **only** if its last label is in a bundled common-TLD list (`com org net edu gov mil int io ai dev app co me info biz xyz md uk de fr ca au nz in jp cn ru br mx nl se no dk fi pl es it ch at be ie pt gr il za kr tw hk sg tr ua cz ro hu eu us` plus the TLDs of dictionary hosts). Otherwise it raises `site_unrecognised` and is **not** added, because silently inventing a host breaks principle 1. So `node.js` and `wibble.zzz` warn rather than becoming hosts; `example.com` is accepted.
+An **IPv4 literal** is accepted as a host (octets 0–255); anything else that merely looks numeric raises `site_unrecognised`. A match preceded by `@` (an email address) or carrying a `:port` is **not** a host (review F8, F9). Otherwise a bare domain is accepted **only** if its last label is in a bundled common-TLD list (`com org net edu gov mil int io ai dev app co me info biz xyz md uk de fr ca au nz in jp cn ru br mx nl se no dk fi pl es it ch at be ie pt gr il za kr tw hk sg tr ua cz ro hu eu us` plus the TLDs of dictionary hosts). Otherwise it raises `site_unrecognised` and is **not** added, because silently inventing a host breaks principle 1. So `node.js` and `wibble.zzz` warn rather than becoming hosts; `example.com` is accepted.
 
 The sensitive-site list lives in **`src/core/exclusions/sensitive.ts`** as the single source of truth. The Day 11 classifier extends that module instead of keeping a second list.
 
@@ -138,7 +143,7 @@ Trigger verbs: `finish`, `complete`, `read`, `write`, `revise`, `review`, `study
 
 ## 7. Mode
 
-`gentle`, `adaptive` or `strict` is recognised only as an explicit phrase: `<mode> mode` or `be <mode>` ("gentle mode", "be strict"). A bare "gentle" or "strict" in ordinary prose ("study gentle topics") is **not** a mode (D-025). Otherwise `ctx.defaults.mode` with no warning (the form shows the mode anyway).
+**Mode is matched before the objective step**, and its span is blanked from the objective clause, so "study for 2 hours in strict mode" sets the mode and leaves no "in strict mode" debris (review F6). `gentle`, `adaptive` or `strict` is recognised only as an explicit phrase: `<mode> mode` or `be <mode>` ("gentle mode", "be strict"). A bare "gentle" or "strict" in ordinary prose ("study gentle topics") is **not** a mode (D-025). Otherwise `ctx.defaults.mode` with no warning (the form shows the mode anyway).
 
 ## 8. Task label → `taskLabel`
 
@@ -156,7 +161,9 @@ The confirm form shows Task and Goal as separate fields, and the PRD reference s
 
 1. **Derive a subject** from the objective: drop the trigger verb, leading determiners and quantifier phrases (`the first four chapters of`, `my`, `a`, `some`, `all of`), and trailing time words (`today`, `tonight`, `tomorrow`, `this week`). Prefer a capitalised proper-noun phrase when the objective contains one.
 2. **Never use a leftover subordinate clause as the label.** If what's left starts with a subordinating conjunction (`because`, `since`, `so that`, `as`, `while`, `after`, `before`, `due`, `although`), discard it.
-3. **The label must not equal the objective** (compared case-insensitively, ignoring punctuation). If it would, use the derived subject. If no subject can be derived, keep the objective text and raise `label_fallback`.
+3. **Prefer the derived subject over the objective.** If the label would otherwise equal the objective (compared case-insensitively, ignoring punctuation), use the subject. Only when no subject can be derived does the label keep the objective text, and then `label_fallback` is raised (so "study for 2 hours" gives the label "Study" and asks the user to name the task). This is the single case where label and objective may match (review F15).
+4. **Strip dangling function words from either end** of a candidate label: leading or trailing joiners, determiners, prepositions, conjunctions and question words (`can`, `could`, `should`, `why`, `what`, `how`, `do`, `does`, `then`, `actually`, `and`, `thing`). A label must never be only such words ("Can I", "Actually", "Check then", "For chemistry"), and never start with one (review F1, F2).
+5. **Numeric-only leftovers are never labels or keywords** ("For 9999", "1e9").
 4. Only then apply the §8 fallback chain.
 
 `parse_failed` aside, the label is always something the user would recognise as the name of their task.
@@ -169,6 +176,12 @@ The confirm form shows Task and Goal as separate fields, and the PRD reference s
 - Cap at 12 keywords here (the validator allows 40; the rest is room for the user), each 1–100 characters, with `keywords_truncated` when cut.
 - Keywords are what the classifier matches titles against, so they must be the user's own words, never expanded by the parser.
 
+### 9.2 Keyword quality, part 2 (D-026, review F3, F4, F17)
+
+- **Phrase candidates are filtered too.** A phrase whose first or last token is weak, or which is made only of weak tokens, is rejected. So `for the biology exam`, `in strict mode`, `and write`, `chapter 5 page 9` never become keywords.
+- **Generic web and filler words are blocked** as single keywords, because a keyword like `home` plus a mixed-use host would classify a site's home page as RELEVANT (FR-C6): `com`, `www`, `http`, `https`, `page`, `pages`, `home`, `site`, `website`, `web`, `online`, `news`, `video`, `videos`, `work`, `thing`, `things`, `stuff`, `focus`, `why`, `how`, `what`, `notes` only when it is the sole token of a phrase, plus clock-shaped tokens (`5pm`, `17:00`).
+- **Sensitive spans are blanked from the keyword sources**, so a skipped private site's name can't be persisted as a keyword (review F17). The **task label may still contain it**, deliberately: the label is the user's own naming of their task, shown in an editable field before anything is saved, whereas a keyword is matched against page titles, where a private site's name would both leak and misclassify.
+
 ### 9.1 Keyword quality (D-025)
 
 A weak keyword causes false RELEVANT results on Day 11, which is the failure the PRD cares most about. So:
@@ -180,7 +193,7 @@ A weak keyword causes false RELEVANT results on Day 11, which is the failure the
 ## 10. Validation, clamps and warning precedence
 
 - `plannedMin` is clamped to 5–480. Below 5 → 5 with `duration_clamped_min`; above 480 → 480 with `duration_clamped_max` (BR-5).
-- The draft is then run through the Day 06 `validateSessionConfig`-style validators. **If it somehow fails, the parser falls back to a minimal safe draft** (label fallback, default duration, no hosts, no keywords) with the warning `parse_failed`, and never returns an invalid draft.
+- The draft is then run through the Day 06 `validateSessionConfig`-style validators. The safe draft uses a **hard-coded known-good mode** (`gentle`), never `ctx.defaults.mode`, so it can never itself be invalid (review F7). **If validation fails, the parser falls back to that minimal safe draft** (label fallback, default duration, no hosts, no keywords) with the warning `parse_failed`, and never returns an invalid draft.
 - At most one warning per field; precedence within a field is the order of the codes in §11.
 
 ## 11. Warning codes

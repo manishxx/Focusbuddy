@@ -138,6 +138,179 @@ export const JOINERS: ReadonlySet<string> = new Set([
   "with",
 ]);
 
+/** Question words and discourse markers (§8.1 step 4). */
+export const QUESTION_WORDS: ReadonlySet<string> = new Set([
+  "actually",
+  "am",
+  "are",
+  "be",
+  "been",
+  "being",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "had",
+  "has",
+  "have",
+  "having",
+  "is",
+  "may",
+  "might",
+  "must",
+  "shall",
+  "should",
+  "then",
+  "thing",
+  "things",
+  "was",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "whom",
+  "whose",
+  "why",
+  "will",
+  "would",
+  "how",
+]);
+
+/** Prepositions and conjunctions beyond the joiners above (§8.1 step 4). */
+const PREPOSITIONS_AND_CONJUNCTIONS: readonly string[] = [
+  "above",
+  "across",
+  "after",
+  "against",
+  "along",
+  "also",
+  "among",
+  "as",
+  "before",
+  "behind",
+  "below",
+  "beneath",
+  "beside",
+  "between",
+  "beyond",
+  "but",
+  "down",
+  "during",
+  "inside",
+  "into",
+  "just",
+  "near",
+  "nor",
+  "off",
+  "onto",
+  "out",
+  "outside",
+  "over",
+  "past",
+  "please",
+  "really",
+  "so",
+  "than",
+  "through",
+  "to",
+  "toward",
+  "towards",
+  "under",
+  "up",
+  "upon",
+  "within",
+  "without",
+  "yet",
+];
+
+/** Pronouns that can be left dangling at either end of a leftover. */
+const PRONOUNS: readonly string[] = [
+  "he",
+  "her",
+  "him",
+  "his",
+  "i",
+  "it",
+  "its",
+  "me",
+  "my",
+  "our",
+  "she",
+  "that",
+  "their",
+  "them",
+  "these",
+  "they",
+  "this",
+  "those",
+  "us",
+  "we",
+  "you",
+  "your",
+];
+
+/**
+ * §8.1 step 4: words that carry no task on their own. A label never starts or ends
+ * with one, and never consists only of them.
+ */
+export const FUNCTION_WORDS: ReadonlySet<string> = new Set([
+  ...DETERMINERS,
+  ...JOINERS,
+  ...QUESTION_WORDS,
+  ...SUBORDINATORS,
+  ...PREPOSITIONS_AND_CONJUNCTIONS,
+  ...PRONOUNS,
+]);
+
+/** §8.1 step 5: a token that is only a number, including "1e9", "1,5" and "17:00". */
+const NUMERIC_TOKEN = /^[0-9]+(?:[.,:][0-9]+)*(?:e[+-]?[0-9]+)?$/i;
+
+export function isNumericToken(word: string): boolean {
+  return NUMERIC_TOKEN.test(bareWord(word));
+}
+
+/** True when every word is a function word or a number (§8.1 steps 4, 5). */
+export function isAllFunctionWords(text: string): boolean {
+  const list = words(text);
+  if (list.length === 0) return true;
+  return list.every((w) => {
+    const bare = bareWord(w);
+    return bare.length === 0 || FUNCTION_WORDS.has(bare) || isNumericToken(bare) || TIME_WORDS.has(bare);
+  });
+}
+
+/**
+ * §8.1 step 4: strips dangling function words, determiners, prepositions,
+ * conjunctions, question words and bare numbers from **both** ends, iteratively.
+ * Returns "" when nothing of substance is left.
+ */
+export function stripFunctionWords(text: string): string {
+  let list = words(stripOrphanPunctuation(text));
+  const danglingAt = (i: number): boolean => {
+    const word = list[i];
+    if (word === undefined) return false;
+    const bare = bareWord(word);
+    return bare.length === 0 || FUNCTION_WORDS.has(bare) || isNumericToken(bare) || TIME_WORDS.has(bare);
+  };
+  for (;;) {
+    if (list.length === 0) return "";
+    if (danglingAt(0)) {
+      list = list.slice(1);
+      continue;
+    }
+    if (danglingAt(list.length - 1)) {
+      list = list.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  const out = stripOrphanPunctuation(list.join(" "));
+  return isAllFunctionWords(out) ? "" : out;
+}
+
 const WORD_CHARS = /[^\p{L}\p{N}'-]/gu;
 
 /** A word with its surrounding punctuation removed, lowercased. */
@@ -217,6 +390,9 @@ export function deriveSubject(source: string): string | null {
   };
   while (droppable(list[0])) list = list.slice(1);
 
+  // §8.1 step 4: nothing dangling at either end ("for the biology exam" → "biology exam").
+  list = words(stripFunctionWords(list.join(" ")));
+
   // A proper-noun phrase in what is left wins, before the "of" rule below, so the
   // "of" inside a name ("Treaty of Westphalia") is kept.
   const named = properNounPhrases(stripOrphanPunctuation(list.join(" ")))[0];
@@ -238,7 +414,7 @@ export function deriveSubject(source: string): string | null {
     else break;
   }
 
-  const rest = stripOrphanPunctuation(list.join(" "));
+  const rest = stripFunctionWords(list.join(" "));
   if (rest.length === 0) return null;
   // The "of" rule may have exposed a name ("chapters of Pattern Recognition today").
   return capitaliseFirst(properNounPhrases(rest)[0] ?? rest);

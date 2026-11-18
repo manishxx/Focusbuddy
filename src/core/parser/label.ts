@@ -8,7 +8,7 @@
  * objective text, the whole cleaned sentence, the bank's default label.
  */
 import { LIMITS } from "../storage/validate";
-import { sameText, startsWithSubordinator } from "./subject";
+import { sameText, startsWithSubordinator, stripFunctionWords } from "./subject";
 import { capitaliseFirst, collapse, stripOrphanPunctuation, toLowerAligned } from "./text";
 
 /** PARSER_SPEC §8 leading filler. */
@@ -130,16 +130,23 @@ function dropFiller(text: string): string {
   return out;
 }
 
-/** Keeps only the fragments that say something (see GLUE_WORDS). */
+/**
+ * Keeps only the fragments that say something (see GLUE_WORDS).
+ *
+ * Splits on a sentence separator **followed by whitespace or the end of the text**,
+ * and keeps the separators it split on, so an abbreviation ("Ph.D.", "Dr. Smith")
+ * survives unchanged (review F10).
+ */
 function dropGlueFragments(text: string): string {
-  const kept = text
-    .split(/[.;!?]+/u)
-    .map((fragment) => fragment.trim())
-    .filter((fragment) => {
-      const words = toLowerAligned(fragment).match(/[\p{L}\p{N}][\p{L}\p{N}']*/gu) ?? [];
-      return words.length > 0 && words.some((word) => !GLUE_WORDS.has(word));
-    });
-  return kept.join(". ");
+  const parts = text.split(/([.;!?]+(?:\s+|$))/u);
+  let out = "";
+  for (let i = 0; i < parts.length; i += 2) {
+    const fragment = parts[i] ?? "";
+    const separator = parts[i + 1] ?? "";
+    const list = toLowerAligned(fragment).match(/[\p{L}\p{N}][\p{L}\p{N}']*/gu) ?? [];
+    if (list.length > 0 && list.some((word) => !GLUE_WORDS.has(word))) out += fragment + separator;
+  }
+  return out;
 }
 
 export type LabelResult = {
@@ -171,10 +178,12 @@ export function buildLabel(
   wholeSentence: string,
   defaultLabel: string,
 ): LabelResult {
-  const cleaned = stripOrphanPunctuation(dropGlueFragments(stripOrphanPunctuation(dropFiller(leftover))));
-  // §8.1 step 2: a leftover subordinate clause ("because it is due tomorrow") is
-  // not the name of a task.
-  const usable = cleaned.length >= 2 && !startsWithSubordinator(cleaned) && !sameText(cleaned, objective);
+  const swept = stripOrphanPunctuation(dropGlueFragments(stripOrphanPunctuation(dropFiller(leftover))));
+  // §8.1 steps 2 and 4: a leftover subordinate clause ("because it is due tomorrow")
+  // is not the name of a task, and nothing dangles at either end ("Can I", "Actually",
+  // "And then write notes" → "Write notes").
+  const cleaned = startsWithSubordinator(swept) ? "" : stripFunctionWords(swept);
+  const usable = cleaned.length >= 2 && !sameText(cleaned, objective);
   if (usable) return { ...cap(capitaliseFirst(cleaned)), fallback: false, source: "leftover" };
   // §8.1 step 3: the subject, never a label equal to the objective.
   if (subject !== null && subject.length >= 2 && !sameText(subject, objective)) {
@@ -184,7 +193,9 @@ export function buildLabel(
     // No subject could be derived: keep the goal text and ask for a name (§8.1 step 3).
     return { ...cap(capitaliseFirst(objective)), fallback: true, source: "objective" };
   }
-  const whole = stripOrphanPunctuation(wholeSentence);
+  // §8.1 steps 4 and 5: the whole-sentence fallback is swept too, so a sentence that
+  // is only filler, a duration and a number ("for 9999 hours") is not a task name.
+  const whole = stripFunctionWords(stripOrphanPunctuation(dropFiller(wholeSentence)));
   if (whole.length >= 2) {
     const { label } = cap(capitaliseFirst(whole));
     return { label, truncated: false, fallback: true, source: "sentence" };

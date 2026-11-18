@@ -92,6 +92,8 @@ function clauseEnd(lower: string, from: number, consumed: readonly Span[]): numb
     const next = lower[i + 1];
     if (next !== undefined && !/\s/u.test(next)) continue;
     if (consumed.some((sp) => i >= sp.start && i < sp.end)) continue;
+    // Not after an abbreviation: "Dr. Smith", "Ph.D. thesis", "30 min." (review F10).
+    if (ch === "." && /(?:^|[^\p{L}\p{N}])[\p{L}\p{N}]{1,3}$/u.test(lower.slice(0, i))) continue;
     end = i;
     break;
   }

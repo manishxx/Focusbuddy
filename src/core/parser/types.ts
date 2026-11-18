@@ -52,7 +52,7 @@ export type WarningCode =
   | "parse_failed";
 
 /** Never the whole sentence (PARSER_SPEC §2, principle 3). */
-export type ParseWarningData = { value?: string; minutes?: number; names?: string[] };
+export type ParseWarningData = { value?: string; minutes?: number; count?: number; names?: string[] };
 
 export type ParseWarning = {
   code: WarningCode;

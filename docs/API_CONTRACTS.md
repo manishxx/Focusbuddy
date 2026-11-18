@@ -49,7 +49,7 @@ Content scripts can't forge `sender.url`: the browser sets it from the frame's c
 
 | Type | Payload | Effect / reply data | PRD |
 |---|---|---|---|
-| `parse.intent` | `{ text: string ≤ 1000 }` | `{ draft: SessionDraft, warnings[] }`; pure, nothing stored | FR-T1, T2 |
+| `parse.intent` | `{ text: string ≤ 1000 }` | `{ draft: SessionDraft, warnings[] }`; nothing is stored. A wrong shape or type → `invalid_message`; text over 1,000 characters → `invalid_argument` (a value out of range, D-026). Works in safe mode and when storage can't open: the default mode is then used | FR-T1, T2 |
 | `session.start` | `{ draft: SessionDraft }` where `SessionDraft = SessionConfig & { plannedMin: 5–480 }` with `mode` optional (defaults to prefs) (D-022) | Starts and shows a start notification + badge; replies `{ sessionId }`. If one is active → `invalid_state` with `{ activeSessionId }` (AC-29) | FR-S1, S4 |
 | `session.pause` / `session.resume` | `{}` | State change | FR-S6 |
 | `session.continue` | `{}` | Confirms "Continue your session?" after an absence auto-pause | BR-1 (amended) |

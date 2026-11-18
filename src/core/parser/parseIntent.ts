@@ -9,13 +9,13 @@ import { format, type MessageKey } from "../messages";
 import type { Mode } from "../types";
 import { LIMITS, validateSessionConfig } from "../storage/validate";
 import type { SessionDraft } from "../session/types";
-import { findDuration } from "./duration";
-import { buildKeywords } from "./keywords";
+import { expandLead, findDuration } from "./duration";
+import { buildKeywords, KEYWORDS_MAX } from "./keywords";
 import { buildLabel } from "./label";
 import { findObjective } from "./objective";
 import { deriveSubject } from "./subject";
 import { buildLookup, findSites, SITES } from "./sites";
-import { blank, normalise } from "./text";
+import { blank, normalise, stripOrphanPunctuation } from "./text";
 import {
   WARNING_ORDER,
   WARNING_VALUE_MAX,
@@ -105,6 +105,12 @@ function clampPlanned(minutes: number): { plannedMin: number; warning: ParseWarn
 const shorten = (value: string): string =>
   value.length <= WARNING_VALUE_MAX ? value : value.slice(0, WARNING_VALUE_MAX - 1) + "…";
 
+/**
+ * §10 / review F7: the safe draft uses a hard-coded known-good mode, never
+ * `ctx.defaults.mode`, so a bad ctx can never make the safe draft invalid too.
+ */
+const SAFE_MODE: Mode = "gentle";
+
 function safeDraft(ctx: ParseCtx): SessionDraft {
   return {
     taskLabel: format("parse.defaultLabel"),
@@ -112,8 +118,23 @@ function safeDraft(ctx: ParseCtx): SessionDraft {
     allowedHosts: [],
     keywords: [],
     plannedMin: clampPlanned(ctx.defaults.plannedMin).plannedMin,
-    mode: ctx.defaults.mode,
+    mode: SAFE_MODE,
   };
+}
+
+/**
+ * The label with any sensitive site name removed (review F17). The label text comes
+ * from `clean`, so the spans are found by index when the label is a slice of it, and
+ * by text otherwise (a fallback label).
+ */
+function withoutSensitive(clean: string, label: string, sensitiveSpans: readonly Span[]): string {
+  if (sensitiveSpans.length === 0) return label;
+  let out = label;
+  for (const span of sensitiveSpans) {
+    const name = clean.slice(span.start, span.end);
+    if (name.length > 0) out = out.split(name).join(" ");
+  }
+  return stripOrphanPunctuation(out);
 }
 
 /** The dictionary lookup is built once: the bundled dictionary never changes. */
@@ -140,23 +161,25 @@ export function parseIntent(text: string, ctx: ParseCtx): ParseResult {
   consumed.push(...sites.spans);
   let allowedHosts = sites.hosts;
   if (allowedHosts.length > LIMITS.allowedHosts) {
+    found.push(warning("sites_truncated", { count: allowedHosts.length }));
     allowedHosts = allowedHosts.slice(0, LIMITS.allowedHosts);
-    found.push(warning("sites_truncated", { minutes: LIMITS.allowedHosts }));
   }
   if (sites.sensitive) found.push(warning("site_sensitive_skipped"));
   const unknown = sites.unrecognised[0];
   if (unknown !== undefined) found.push(warning("site_unrecognised", { value: shorten(unknown) }));
 
-  // ---- 4. objective ----
-  const durationBlanked = blank(lower, duration.spans);
-  const objectiveFound = findObjective(blank(clean, duration.spans), durationBlanked, consumed);
+  // ---- 4. mode (§7: before the objective, so "in strict mode" is not part of the
+  // goal clause and cannot reach the label or the keywords — review F6) ----
+  const mode = findMode(lower, consumed);
+  if (mode.span !== null) consumed.push(mode.span);
+  const modeLead = mode.span === null ? [] : [expandLead(lower, mode.span)];
+
+  // ---- 5. objective ----
+  const quiet = [...duration.spans, ...modeLead];
+  const objectiveFound = findObjective(blank(clean, quiet), blank(lower, quiet), consumed);
   if (objectiveFound.span !== null) consumed.push(objectiveFound.span);
   if (objectiveFound.objective === "") found.push(warning("objective_missing"));
   if (objectiveFound.truncated) found.push(warning("objective_truncated"));
-
-  // ---- 5. mode ----
-  const mode = findMode(lower, consumed);
-  if (mode.span !== null) consumed.push(mode.span);
 
   // ---- 6. task label ----
   const leftover = blank(clean, consumed);
@@ -166,15 +189,26 @@ export function parseIntent(text: string, ctx: ParseCtx): ParseResult {
   const subject =
     objectiveSpan === null
       ? null
-      : deriveSubject(blank(clean, [...duration.spans, ...sites.spans]).slice(objectiveSpan.start, objectiveSpan.end));
+      : deriveSubject(
+          blank(clean, [...duration.spans, ...sites.spans, ...modeLead]).slice(objectiveSpan.start, objectiveSpan.end),
+        );
   const label = buildLabel(leftover, objectiveFound.objective, subject, clean, format("parse.defaultLabel"));
   if (label.truncated) found.push(warning("label_truncated"));
   if (label.fallback) found.push(warning("label_fallback"));
 
   // ---- 7. keywords ----
-  // A label that is only the bank's default is not the user's words, so it feeds no keywords.
-  const keywords = buildKeywords(label.source === "default" ? "" : label.label, objectiveFound.objective, subject);
-  if (keywords.truncated) found.push(warning("keywords_truncated", { minutes: keywords.keywords.length }));
+  // §9.2 / review F17: the sensitive spans are blanked out of the keyword sources, so a
+  // skipped private site's name can never be persisted as a keyword. A label that is
+  // only the bank's default is not the user's words, so it feeds no keywords either.
+  const keywordLabel = label.source === "default" ? "" : withoutSensitive(clean, label.label, sites.sensitiveSpans);
+  const keywordObjective =
+    objectiveSpan === null
+      ? ""
+      : stripOrphanPunctuation(
+          blank(clean, [...quiet, ...sites.sensitiveSpans]).slice(objectiveSpan.start, objectiveSpan.end),
+        );
+  const keywords = buildKeywords(keywordLabel, keywordObjective, subject);
+  if (keywords.truncated) found.push(warning("keywords_truncated", { count: KEYWORDS_MAX }));
 
   // ---- 8. validate and clamp ----
   if (duration.minutes === null && duration.warnings.length === 0) found.push(warning("duration_defaulted"));

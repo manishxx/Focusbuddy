@@ -7,7 +7,10 @@ import {
   SUBORDINATORS,
   TIME_WORDS,
   deriveSubject,
+  isAllFunctionWords,
+  isNumericToken,
   properNounPhrases,
+  stripFunctionWords,
   sameText,
   startsWithSubordinator,
 } from "../../../src/core/parser/subject";
@@ -31,6 +34,22 @@ describe("deriveSubject (§8.1 step 1)", () => {
     ["   ,  ", null],
   ])("%s → %s", (objective, expected) => {
     expect(deriveSubject(objective)).toBe(expected);
+  });
+
+  it("drops a quantifier phrase ending in 'of' when no name follows (§8.1 step 1)", () => {
+    expect(deriveSubject("read all of the enzyme diagrams")).toBe("Enzyme diagrams");
+    expect(deriveSubject("finish two of the exercises")).toBe("Exercises");
+  });
+
+  it("isAllFunctionWords and isNumericToken classify the §8.1 step 4 and 5 leftovers", () => {
+    for (const text of ["Can I", "and then", "for 9999 hours", "the", "", "  ,  ", "1e9"]) {
+      expect(isAllFunctionWords(text), text).toBe(true);
+    }
+    for (const text of ["chemistry", "Can I study maths"]) expect(isAllFunctionWords(text), text).toBe(false);
+    for (const token of ["1", "1,5", "17:00", "1e9", "2.25"]) expect(isNumericToken(token), token).toBe(true);
+    for (const token of ["1h30", "5pm", "chemistry"]) expect(isNumericToken(token), token).toBe(false);
+    expect(stripFunctionWords("and then write notes")).toBe("write notes");
+    expect(stripFunctionWords("for 9999 hours")).toBe("");
   });
 
   it("drops trailing time words and dangling joiners", () => {
@@ -60,7 +79,13 @@ describe("proper-noun phrases (§8.1, §9.1)", () => {
     expect(properNounPhrases("about Pattern Recognition today")).toEqual(["Pattern Recognition"]);
     expect(properNounPhrases("Google Scholar and Google Docs")).toEqual(["Google Scholar", "Google Docs"]);
     expect(properNounPhrases("the Treaty of Westphalia")).toEqual(["Treaty of Westphalia"]);
+    // M11: two words is the lower bound, four the upper.
     expect(properNounPhrases("one Word")).toEqual([]);
+    expect(properNounPhrases("Word")).toEqual([]);
+    expect(properNounPhrases("Two Words")).toEqual(["Two Words"]);
+    expect(properNounPhrases("One Two Three Four")).toEqual(["One Two Three Four"]);
+    // A longer run contributes its first four words (the regex matches left to right).
+    expect(properNounPhrases("One Two Three Four Five")).toEqual(["One Two Three Four"]);
     expect(properNounPhrases("A B C D E")).toEqual([]);
   });
 

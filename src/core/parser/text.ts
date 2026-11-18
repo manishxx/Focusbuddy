@@ -87,7 +87,7 @@ export function stripOrphanPunctuation(text: string): string {
       // Repeated separators ("a , , b" → "a, b"), then leading/trailing ones.
       .replace(/\s*([,;:])(?:\s*[,;:])+/gu, "$1")
       .replace(/^[^\p{L}\p{N}]+/u, "")
-      .replace(/[\s,;:.\-–—]+$/u, ""),
+      .replace(/[\s,;:.!?\-–—]+$/u, ""),
   );
 }
 

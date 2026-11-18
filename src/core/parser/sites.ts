@@ -5,10 +5,12 @@
  *   host validator (lowercase, no "www.", no port or path).
  * - Names match only on a word boundary, and longer names are matched first, so
  *   "google scholar" wins over "google".
- * - Spoken names are chosen conservatively: a name that is also an everyday
- *   English word in a study sentence (bare "x", "linear", "teams", "meet",
- *   "indeed", "chase") is left out, because a false site is worse than a missing
- *   one — the form lets the user add any site by hand (FR-T4).
+ * - §5.2: a spoken name is in the dictionary only if it is unambiguous in a study
+ *   sentence. Ordinary English words ("medium", "zoom", "scholar", "classroom",
+ *   "wiki", "khan", "insta", "linear", "teams", "meet", "indeed", "chase", "x") are
+ *   not names; those sites stay reachable through an unambiguous form ("medium.com",
+ *   "zoom.us", "google scholar", "wikipedia"). A wrong host is worse than a missing
+ *   one, which the user can add (FR-T4).
  * - Sensitive sites are never allowed: they are recognised only so they can be
  *   dropped with a warning (exclusion beats an allowlist, ARCHITECTURE §5.3 step 1).
  *   The list lives in `core/exclusions/sensitive.ts`, the single source of truth that
@@ -26,14 +28,14 @@ const entry = (host: string, names: readonly string[], mixedUse = false): SiteEn
 /** PARSER_SPEC §5 V1 dictionary. `mixedUse: true` = the classifier needs the title. */
 export const SITES: SiteDictionary = Object.freeze([
   // ---- study and reference ----
-  entry("scholar.google.com", ["google scholar", "scholar.google.com", "scholar"]),
+  entry("scholar.google.com", ["google scholar", "scholar.google.com"]),
   entry("docs.google.com", ["google docs", "docs.google.com", "google doc", "gdocs"]),
   entry("drive.google.com", ["google drive", "drive.google.com", "gdrive"]),
-  entry("classroom.google.com", ["google classroom", "classroom.google.com", "classroom"]),
+  entry("classroom.google.com", ["google classroom", "classroom.google.com"]),
   entry("slides.google.com", ["google slides", "slides.google.com"]),
   entry("sheets.google.com", ["google sheets", "sheets.google.com"]),
-  entry("wikipedia.org", ["wikipedia", "wikipedia.org", "wiki"], true),
-  entry("khanacademy.org", ["khan academy", "khanacademy.org", "khan"]),
+  entry("wikipedia.org", ["wikipedia", "wikipedia.org"], true),
+  entry("khanacademy.org", ["khan academy", "khanacademy.org"]),
   entry("coursera.org", ["coursera", "coursera.org"]),
   entry("edx.org", ["edx", "edx.org"]),
   entry("jstor.org", ["jstor", "jstor.org"]),
@@ -76,7 +78,7 @@ export const SITES: SiteDictionary = Object.freeze([
   entry("canva.com", ["canva", "canva.com"], true),
   // ---- communication (allowed only if the user names it) ----
   entry("slack.com", ["slack", "slack.com"]),
-  entry("zoom.us", ["zoom", "zoom.us"]),
+  entry("zoom.us", ["zoom.us"]),
   entry("meet.google.com", ["google meet", "meet.google.com"]),
   entry("teams.microsoft.com", ["microsoft teams", "ms teams", "teams.microsoft.com"]),
   entry("discord.com", ["discord", "discord.com"], true),
@@ -84,11 +86,11 @@ export const SITES: SiteDictionary = Object.freeze([
   entry("youtube.com", ["youtube", "youtube.com", "you tube"], true),
   entry("reddit.com", ["reddit", "reddit.com"], true),
   entry("twitch.tv", ["twitch", "twitch.tv"], true),
-  entry("medium.com", ["medium.com", "medium"], true),
+  entry("medium.com", ["medium.com"], true),
   entry("substack.com", ["substack", "substack.com"], true),
   entry("twitter.com", ["twitter", "twitter.com", "x.com"], true),
   entry("linkedin.com", ["linkedin", "linkedin.com", "linked in"], true),
-  entry("instagram.com", ["instagram", "instagram.com", "insta"], true),
+  entry("instagram.com", ["instagram", "instagram.com"], true),
   entry("tiktok.com", ["tiktok", "tiktok.com", "tik tok"], true),
   entry("facebook.com", ["facebook", "facebook.com"], true),
   entry("netflix.com", ["netflix", "netflix.com"], true),
@@ -139,12 +141,18 @@ export const COMMON_TLDS: ReadonlySet<string> = new Set([
   ...[...SITES.map((s) => s.host), ...SENSITIVE_HOSTS].map((h) => h.slice(h.lastIndexOf(".") + 1)),
 ]);
 
-const DIGITS_ONLY = /^[0-9]+$/;
-
-/** §5.1: a host is usable only with a known TLD (or as an IPv4 literal). */
+/**
+ * §5.1: a bare domain is usable only with a known TLD. An IPv4 literal does not go
+ * through here: `findSites` matches it on its own and checks it with `isValidHost`,
+ * which enforces the four octets 0–255 (review F9).
+ */
 export function hasKnownTld(host: string): boolean {
-  const tld = host.slice(host.lastIndexOf(".") + 1);
-  return DIGITS_ONLY.test(tld) ? isValidHost(host) : COMMON_TLDS.has(tld);
+  return COMMON_TLDS.has(host.slice(host.lastIndexOf(".") + 1));
+}
+
+/** A dotted-quad that passes the Day 06 host rules (octets 0–255). */
+export function isIpv4(host: string): boolean {
+  return /^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$/.test(host) && isValidHost(host);
 }
 
 /**
@@ -152,15 +160,22 @@ export function hasKnownTld(host: string): boolean {
  * two or more characters, so "e.g" and "i.e" are not read as hosts. An optional
  * path, query or fragment is dropped.
  */
-const BARE_DOMAIN = /(?<![\p{L}\p{N}_-])((?:[a-z0-9][a-z0-9-]*\.)+[a-z][a-z0-9-]+)(?:\/[^\s]*)?/gu;
+const BARE_DOMAIN = /(?<![\p{L}\p{N}_@.-])((?:[a-z0-9][a-z0-9-]*\.)+[a-z][a-z0-9-]+)(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
 /** Anything site-shaped that is not a host, for `site_unrecognised`. */
-const SITE_SHAPED = /(?<![\p{L}\p{N}_-])((?:[\p{L}0-9][\p{L}0-9-]*\.)+[\p{L}][\p{L}0-9-]{1,23})(?:\/[^\s]*)?/gu;
+const SITE_SHAPED =
+  /(?<![\p{L}\p{N}_@.-])((?:[\p{L}0-9][\p{L}0-9-]*\.)+[\p{L}][\p{L}0-9-]{1,23})(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
+/** A dotted-quad, checked against the Day 06 host rules (octets 0–255) (§5.1, review F9). */
+const IPV4_SHAPED = /(?<![\p{L}\p{N}_@.-])([0-9]{1,3}(?:\.[0-9]{1,3}){3})(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
+/** An email address: its domain is not a site the user named (review F8). */
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+/gu;
 
 export type SiteFindings = {
   hosts: string[];
   spans: Span[];
   /** A sensitive site was named and skipped. */
   sensitive: boolean;
+  /** Where the sensitive names were, so they can be kept out of the keywords (review F17). */
+  sensitiveSpans: Span[];
   /** A site-like word could not be mapped to a host. */
   unrecognised: string[];
   /** The mixed-use flag per matched host (for the UI and the Day 11 classifier). */
@@ -176,8 +191,12 @@ export function findSites(lower: string, lookup: SiteLookup, consumed: readonly 
   const at: { host: string; start: number }[] = [];
   const mixedUse: Record<string, boolean> = {};
   const unrecognised: string[] = [];
+  const sensitiveSpans: Span[] = [];
   let sensitive = false;
   const taken = (span: Span): boolean => overlapsAny(span, consumed) || overlapsAny(span, spans);
+  const note = (value: string): void => {
+    if (unrecognised.length === 0) unrecognised.push(value);
+  };
   const add = (host: string, start: number): void => {
     at.push({ host, start });
     mixedUse[host] = lookup.byHost.get(host)?.mixedUse ?? false;
@@ -187,9 +206,30 @@ export function findSites(lower: string, lookup: SiteLookup, consumed: readonly 
     for (const span of findWords(lower, name)) {
       if (taken(span)) continue;
       spans.push(span);
-      if (isSensitive) sensitive = true;
-      else add(host, span.start);
+      if (isSensitive) {
+        sensitive = true;
+        sensitiveSpans.push(span);
+      } else add(host, span.start);
     }
+  }
+
+  // An email address is not a site (review F8): its span is taken so the domain
+  // inside it cannot be read as a host, and the address stays out of the label.
+  for (const match of lower.matchAll(EMAIL)) {
+    const span = { start: match.index, end: match.index + match[0].length };
+    if (!taken(span)) spans.push(span);
+  }
+
+  // IPv4 literals (review F9): accepted as hosts, with the octet check.
+  for (const match of lower.matchAll(IPV4_SHAPED)) {
+    const span = { start: match.index, end: match.index + match[0].length };
+    if (taken(span)) continue;
+    spans.push(span);
+    const host = normaliseHost(match[1] ?? "");
+    if (match[2] !== undefined)
+      note(host); // a :port is not a host (review F8)
+    else if (isIpv4(host)) add(host, span.start);
+    else note(host);
   }
 
   // Bare domains in what is left.
@@ -202,24 +242,27 @@ export function findSites(lower: string, lookup: SiteLookup, consumed: readonly 
     spans.push(span);
     if (isSensitiveHost(host, lookup.sensitiveHosts)) {
       sensitive = true;
+      sensitiveSpans.push(span);
       continue;
     }
-    if (isValidHost(host) && host.length <= LIMITS.hostLength && hasKnownTld(host)) add(host, start);
-    else if (unrecognised.length === 0) unrecognised.push(host);
+    // A :port suffix is rejected, not trimmed (review F8).
+    if (match[2] !== undefined) note(host);
+    else if (isValidHost(host) && host.length <= LIMITS.hostLength && hasKnownTld(host)) add(host, span.start);
+    else note(host);
   }
 
   // Site-shaped words that are not valid hosts (an IDN in Unicode form, "a.b.",
-  // an IPv6-ish token): reported once, never allowed.
+  // an unknown top-level label): reported once, never allowed.
   for (const match of lower.matchAll(SITE_SHAPED)) {
     const start = match.index;
     const span = { start, end: start + match[0].length };
     if (taken(span)) continue;
     spans.push(span);
-    if (unrecognised.length === 0) unrecognised.push(normaliseHost(match[1] ?? ""));
+    note(normaliseHost(match[1] ?? ""));
   }
 
   // Hosts in the order the user named them, de-duplicated.
   const hosts: string[] = [];
   for (const { host } of [...at].sort((a, b) => a.start - b.start)) if (!hosts.includes(host)) hosts.push(host);
-  return { hosts, spans, sensitive, unrecognised, mixedUse };
+  return { hosts, spans, sensitive, sensitiveSpans, unrecognised, mixedUse };
 }

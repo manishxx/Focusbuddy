@@ -9,7 +9,15 @@
 import { LIMITS } from "../storage/validate";
 import { GLUE_WORDS } from "./label";
 import { TRIGGER_VERBS } from "./objective";
-import { bareWord, properNounPhrases, QUANTITY_WORDS, TIME_WORDS, words } from "./subject";
+import {
+  bareWord,
+  FUNCTION_WORDS,
+  isNumericToken,
+  properNounPhrases,
+  QUANTITY_WORDS,
+  TIME_WORDS,
+  words,
+} from "./subject";
 import { toLowerAligned } from "./text";
 
 /** PARSER_SPEC §9 cap here; the validator allows 40, the rest is room for the user. */
@@ -130,15 +138,74 @@ export const STOP_WORDS: ReadonlySet<string> = new Set([
   "yours",
 ]);
 
-/** §9.1: a word that can never be a keyword on its own. */
+/**
+ * §9.2: generic web and filler words. A keyword like `home` next to a mixed-use host
+ * would classify a site's home page as RELEVANT, which is the FR-C6 failure the PRD
+ * cares most about, so these never stand alone.
+ */
+export const GENERIC_WORDS: ReadonlySet<string> = new Set([
+  "com",
+  "focus",
+  "home",
+  "how",
+  "http",
+  "https",
+  "net",
+  "news",
+  "online",
+  "org",
+  "page",
+  "pages",
+  "site",
+  "stuff",
+  "thing",
+  "things",
+  "video",
+  "videos",
+  "web",
+  "website",
+  "what",
+  "why",
+  "work",
+  "www",
+]);
+
+/** §9.2: a clock-shaped token ("5pm", "17:00", "9 am" after tokenising). */
+const CLOCK_SHAPED = /^(?:[0-9]{1,2}[.:][0-9]{2}|[0-9]{1,4}(?:am|pm)|am|pm)$/;
+
+/** §9.1, §9.2: a word that can never be a keyword on its own. */
 export function isWeakKeyword(token: string): boolean {
   return (
     STOP_WORDS.has(token) ||
     TIME_WORDS.has(token) ||
     QUANTITY_WORDS.has(token) ||
     GLUE_WORDS.has(token) ||
-    /^\p{N}+$/u.test(token)
+    GENERIC_WORDS.has(token) ||
+    FUNCTION_WORDS.has(token) ||
+    CLOCK_SHAPED.test(token) ||
+    isNumericToken(token) ||
+    // A token that starts with a digit is a measurement or an id, never a topic
+    // ("1e9", "1h30", "5pm", "2x").
+    /^[0-9]/.test(token)
   );
+}
+
+/**
+ * §9.2: a phrase is rejected when its first or last token is weak, or when every
+ * token is weak. So "for the biology exam", "in strict mode", "and write",
+ * "chapter 5 page 9" and "how to code" never become keywords.
+ */
+export function isWeakPhrase(phrase: string): boolean {
+  const raw = words(phrase);
+  // A dot inside a phrase means an abbreviation or a host fragment ("dr. smith's ph.d",
+  // "sub.mail.google.com"), never a topic.
+  if (raw.some((w) => w.includes("."))) return true;
+  const list = raw.map((w) => bareWord(w));
+  const first = list[0];
+  const last = list[list.length - 1];
+  if (first === undefined || last === undefined) return true;
+  if (isWeakKeyword(first) || isWeakKeyword(last)) return true;
+  return list.every((w) => isWeakKeyword(w));
 }
 
 const TOKEN = /[\p{L}\p{N}]+/gu;
@@ -172,14 +239,18 @@ export function buildKeywords(label: string, objective: string, subject: string 
     if (!candidates.includes(keyword)) candidates.push(keyword);
   };
 
+  const pushPhrase = (value: string): void => {
+    const phrase = toLowerAligned(value).trim();
+    if (!isWeakPhrase(phrase)) push(phrase);
+  };
   // §9.1 (a): proper-noun phrases of two to four words, from the subject and the goal.
   for (const source of [subject ?? "", objective]) {
-    for (const phrase of properNounPhrases(source)) push(toLowerAligned(phrase));
+    for (const phrase of properNounPhrases(source)) pushPhrase(phrase);
   }
   // §9.1 (b): the derived subject, when it is two to four words.
   if (subject !== null) {
     const count = words(subject).length;
-    if (count >= 2 && count <= 4) push(toLowerAligned(subject).trim());
+    if (count >= 2 && count <= 4) pushPhrase(subject);
   }
 
   for (const source of [subject ?? "", label, objective]) {
