@@ -229,6 +229,16 @@ describe("matching (§5)", () => {
     expect(bad.unrecognised).toEqual(["999.999.999.999"]);
   });
 
+  it("§5.1: address-shaped text that is not a host is reported (D-027)", () => {
+    for (const text of ["read notes on 1.2.3", "open [2001:db8::1]", "open 2001:db8::1", "open 1.2.3.4.5"]) {
+      const found = findSites(text, lookup, []);
+      expect(found.hosts, text).toEqual([]);
+      expect(found.unrecognised.length, text).toBe(1);
+    }
+    // A decimal number is not address-shaped.
+    expect(findSites("chapter 1.5 and section 2.3", lookup, []).unrecognised).toEqual([]);
+  });
+
   it("reports where the sensitive names were, for the keyword sources (review F17)", () => {
     const found = findSites("study on mychart and quizlet", lookup, []);
     expect(found.hosts).toEqual(["quizlet.com"]);

@@ -4,6 +4,9 @@ import {
   buildKeywords,
   isWeakKeyword,
   isWeakPhrase,
+  properNounPhrases,
+  truncatePhrase,
+  FUNCTION_WORDS,
   buildLabel,
   findObjective,
   KEYWORDS_MAX,
@@ -268,6 +271,64 @@ describe("keywords (§9, §9.1)", () => {
     }
   });
 
+  it("truncates a phrase at an interior preposition or conjunction (§9.0, D-027)", () => {
+    expect(truncatePhrase("problem set for calculus")).toBe("problem set");
+    expect(truncatePhrase("lab report for physics")).toBe("lab report");
+    expect(truncatePhrase("wiki articles about x")).toBe("wiki articles");
+    expect(truncatePhrase("revision and homework")).toBe("revision");
+    // of and the are kept, so a proper name survives.
+    expect(truncatePhrase("treaty of westphalia")).toBe("treaty of westphalia");
+    expect(truncatePhrase("battle of the somme")).toBe("battle of the somme");
+    expect(truncatePhrase("pattern recognition")).toBe("pattern recognition");
+    // A breaker in first position is not interior: the phrase check rejects it instead.
+    expect(truncatePhrase("for the biology exam")).toBe("for the biology exam");
+  });
+
+  it("keeps a phrase whose first token is generic, rejects one ending generic (§9.0, D-027)", () => {
+    expect(isWeakPhrase("web development")).toBe(false);
+    expect(isWeakPhrase("news coverage")).toBe(false);
+    expect(isWeakPhrase("home page")).toBe(true);
+    expect(isWeakPhrase("web work")).toBe(true);
+    expect(buildKeywords("Web development", "study web development", "Web development").keywords).toContain(
+      "web development",
+    );
+  });
+
+  it("M11: a one-word capitalised run is never a phrase keyword (§9.1(a) lower bound)", () => {
+    expect(buildKeywords("Chemistry", "revise Chemistry", "Chemistry").keywords).toEqual(["chemistry"]);
+    expect(isWeakPhrase("chemistry")).toBe(true);
+    expect(properNounPhrases("revise Chemistry")).toEqual([]);
+    for (const phrase of buildKeywords("Pattern Recognition", "finish Pattern Recognition", "Pattern Recognition")
+      .keywords) {
+      expect(["pattern recognition", "pattern", "recognition"]).toContain(phrase);
+    }
+  });
+
+  it("treats contractions and stray adverbs as function words, never keywords (§9.0, D-027)", () => {
+    for (const word of [
+      "don",
+      "don't",
+      "can't",
+      "won't",
+      "isn't",
+      "doesn't",
+      "didn't",
+      "couldn't",
+      "shouldn't",
+      "wouldn't",
+      "just",
+      "already",
+      "really",
+      "actually",
+      "thanks",
+      "please",
+      "nt",
+    ]) {
+      expect(isWeakKeyword(word), word).toBe(true);
+      expect(FUNCTION_WORDS.has(word), word).toBe(true);
+    }
+  });
+
   it("blocks generic web and filler single words (§9.2, review F4)", () => {
     for (const word of [
       "com",
@@ -328,6 +389,6 @@ describe("keywords (§9, §9.1)", () => {
   });
 
   it("returns nothing for an empty label and objective", () => {
-    expect(buildKeywords("", "")).toEqual({ keywords: [], truncated: false });
+    expect(buildKeywords("", "")).toEqual({ keywords: [], truncated: false, found: 0 });
   });
 });

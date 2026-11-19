@@ -191,9 +191,25 @@ export function isWeakKeyword(token: string): boolean {
 }
 
 /**
- * §9.2: a phrase is rejected when its first or last token is weak, or when every
- * token is weak. So "for the biology exam", "in strict mode", "and write",
- * "chapter 5 page 9" and "how to code" never become keywords.
+ * §9.0 (D-027): words that end a phrase. "problem set **for** calculus" is two
+ * topics, not one, so the phrase keeps only what comes before the joiner. The
+ * proper-noun connectors `of` and `the` are kept, so "Treaty of Westphalia" and
+ * "Battle of the Somme" survive.
+ */
+const PHRASE_BREAKERS: ReadonlySet<string> = new Set(["about", "and", "for", "in", "on", "or", "to", "with"]);
+
+/** §9.0: cuts a phrase at its first interior breaker. */
+export function truncatePhrase(phrase: string): string {
+  const raw = words(phrase);
+  const at = raw.findIndex((w, i) => i > 0 && PHRASE_BREAKERS.has(bareWord(w)));
+  return (at > 0 ? raw.slice(0, at) : raw).join(" ");
+}
+
+/**
+ * §9.0: a phrase is rejected when its last token is weak, when every token is weak,
+ * or when it holds a dot (an abbreviation or a host fragment). A **generic** first
+ * token is allowed when every other token is a real word, so "web development" is a
+ * keyword while "home page" is not.
  */
 export function isWeakPhrase(phrase: string): boolean {
   const raw = words(phrase);
@@ -203,8 +219,14 @@ export function isWeakPhrase(phrase: string): boolean {
   const list = raw.map((w) => bareWord(w));
   const first = list[0];
   const last = list[list.length - 1];
-  if (first === undefined || last === undefined) return true;
-  if (isWeakKeyword(first) || isWeakKeyword(last)) return true;
+  if (first === undefined || last === undefined || list.length < 2) return true;
+  if (isWeakKeyword(last)) return true;
+  const rest = list.slice(1);
+  if (isWeakKeyword(first)) {
+    // Generic is the one weak class a phrase may open with (§9.0, D-027).
+    if (!GENERIC_WORDS.has(first)) return true;
+    return rest.some((w) => isWeakKeyword(w));
+  }
   return list.every((w) => isWeakKeyword(w));
 }
 
@@ -222,7 +244,12 @@ export function subjectPhrase(label: string): string {
   return list.join(" ");
 }
 
-export type KeywordsResult = { keywords: string[]; truncated: boolean };
+export type KeywordsResult = {
+  keywords: string[];
+  truncated: boolean;
+  /** How many candidates there were before the §9 cap (review F12, D-027). */
+  found: number;
+};
 
 /**
  * Phrases first (a title match needs them), then single words of three or more
@@ -240,7 +267,7 @@ export function buildKeywords(label: string, objective: string, subject: string 
   };
 
   const pushPhrase = (value: string): void => {
-    const phrase = toLowerAligned(value).trim();
+    const phrase = truncatePhrase(toLowerAligned(value).trim());
     if (!isWeakPhrase(phrase)) push(phrase);
   };
   // §9.1 (a): proper-noun phrases of two to four words, from the subject and the goal.
@@ -262,5 +289,5 @@ export function buildKeywords(label: string, objective: string, subject: string 
   }
 
   const truncated = candidates.length > KEYWORDS_MAX;
-  return { keywords: candidates.slice(0, KEYWORDS_MAX), truncated };
+  return { keywords: candidates.slice(0, KEYWORDS_MAX), truncated, found: candidates.length };
 }

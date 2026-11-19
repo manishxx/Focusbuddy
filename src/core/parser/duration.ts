@@ -44,11 +44,13 @@ const INT_WORDS = Object.keys(NUMBER_WORDS)
   .sort((a, b) => b.length - a.length)
   .join("|");
 /**
- * Hours also accept "a"/"an" ("an hour"). Up to nine digits: an absurd magnitude is
- * matched and then clamped by §10, never left to leak into the label (review F11).
+ * Hours also accept "a"/"an" ("an hour"). The digit run is unbounded (§4.1): an absurd
+ * magnitude is matched and then clamped by §10, never left to leak into the label
+ * (review F11). `clampPlanned` rounds and bounds whatever comes out, and a number
+ * past Number.MAX_SAFE_INTEGER still ends at the 480-minute cap.
  */
-const HOUR_NUM = `(?:${INT_WORDS}|an|a|\\d{1,9})`;
-const MIN_NUM = `(?:${INT_WORDS}|\\d{1,9})`;
+const HOUR_NUM = `(?:${INT_WORDS}|an|a|\\d+)`;
+const MIN_NUM = `(?:${INT_WORDS}|\\d+)`;
 const H_UNIT = "(?:hours|hour|hrs|hr|h)";
 const M_UNIT = "(?:minutes|minute|mins|min|m)";
 

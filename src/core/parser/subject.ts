@@ -138,8 +138,45 @@ export const JOINERS: ReadonlySet<string> = new Set([
   "with",
 ]);
 
+/**
+ * Contractions and stray adverbs (§9.0, D-027). The `n't` fragment is listed too,
+ * because tokenising "don't" on non-letters leaves "don" and "t".
+ */
+export const CONTRACTIONS_AND_ADVERBS: readonly string[] = [
+  "already",
+  "aren't",
+  "can't",
+  "cannot",
+  "couldn't",
+  "didn't",
+  "doesn't",
+  "don",
+  "don't",
+  "hasn't",
+  "haven't",
+  "isn't",
+  "just",
+  "n't",
+  "nt",
+  "really",
+  "shouldn't",
+  "thanks",
+  "wasn't",
+  "weren't",
+  "won't",
+  "wouldn't",
+];
+
+/**
+ * The product's own words: "focus" names the app, not the user's task, so it is
+ * never a label on its own and never a keyword (§9.0 lists it as generic).
+ */
+const APP_WORDS: readonly string[] = ["focus", "focused", "focusing", "focussed", "focussing"];
+
 /** Question words and discourse markers (§8.1 step 4). */
 export const QUESTION_WORDS: ReadonlySet<string> = new Set([
+  ...CONTRACTIONS_AND_ADVERBS,
+  ...APP_WORDS,
   "actually",
   "am",
   "are",

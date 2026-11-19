@@ -164,8 +164,17 @@ const BARE_DOMAIN = /(?<![\p{L}\p{N}_@.-])((?:[a-z0-9][a-z0-9-]*\.)+[a-z][a-z0-9
 /** Anything site-shaped that is not a host, for `site_unrecognised`. */
 const SITE_SHAPED =
   /(?<![\p{L}\p{N}_@.-])((?:[\p{L}0-9][\p{L}0-9-]*\.)+[\p{L}][\p{L}0-9-]{1,23})(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
-/** A dotted-quad, checked against the Day 06 host rules (octets 0–255) (§5.1, review F9). */
-const IPV4_SHAPED = /(?<![\p{L}\p{N}_@.-])([0-9]{1,3}(?:\.[0-9]{1,3}){3})(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
+/**
+ * Address-shaped text (§5.1): a dotted quad (checked against the Day 06 host rules,
+ * octets 0–255), a **partial or over-long** dotted run such as "1.2.3" or
+ * "1.2.3.4.5" (three labels or more, so the decimal number "1.5" is not
+ * address-shaped), or an IPv6 literal. Only a full, four-label,
+ * in-range quad becomes a host; the rest raise `site_unrecognised` rather than being
+ * ignored (review F9, D-027).
+ */
+const IPV4_SHAPED = /(?<![\p{L}\p{N}_@.-])([0-9]{1,3}(?:\.[0-9]{1,3}){2,})(?!\.?[0-9])(:[0-9]{1,5})?(?:\/[^\s]*)?/gu;
+/** An IPv6 literal, bracketed or bare, including the "::" short forms. */
+const IPV6_SHAPED = /\[[0-9a-f:]{2,45}\]|(?<![\p{L}\p{N}_@:.-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}/gu;
 /** An email address: its domain is not a site the user named (review F8). */
 const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+/gu;
 
@@ -220,16 +229,17 @@ export function findSites(lower: string, lookup: SiteLookup, consumed: readonly 
     if (!taken(span)) spans.push(span);
   }
 
-  // IPv4 literals (review F9): accepted as hosts, with the octet check.
-  for (const match of lower.matchAll(IPV4_SHAPED)) {
-    const span = { start: match.index, end: match.index + match[0].length };
-    if (taken(span)) continue;
-    spans.push(span);
-    const host = normaliseHost(match[1] ?? "");
-    if (match[2] !== undefined)
-      note(host); // a :port is not a host (review F8)
-    else if (isIpv4(host)) add(host, span.start);
-    else note(host);
+  // IP literals (review F9, D-027): a full in-range dotted quad is a host; a partial
+  // quad, an out-of-range octet, a :port (review F8) or an IPv6 literal is reported.
+  for (const pattern of [IPV4_SHAPED, IPV6_SHAPED]) {
+    for (const match of lower.matchAll(pattern)) {
+      const span = { start: match.index, end: match.index + match[0].length };
+      if (taken(span)) continue;
+      spans.push(span);
+      const host = normaliseHost(match[1] ?? match[0]);
+      if (pattern === IPV4_SHAPED && match[2] === undefined && isIpv4(host)) add(host, span.start);
+      else note(host);
+    }
   }
 
   // Bare domains in what is left.

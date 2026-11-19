@@ -21,8 +21,10 @@ export {
   isWeakKeyword,
   isWeakPhrase,
   subjectPhrase,
+  truncatePhrase,
 } from "./keywords";
 export {
+  CONTRACTIONS_AND_ADVERBS,
   DETERMINERS,
   FUNCTION_WORDS,
   QUESTION_WORDS,

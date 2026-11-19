@@ -7,7 +7,7 @@ Requirement IDs refer to [docs/PRD.md](../docs/PRD.md). The acceptance criteria 
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | F-000 | Product requirements (PRD) | P0 | all | 01, 03 | Architect | DONE (v1.0 baseline approved Day 03) | docs/PRD.md | n/a (doc) | Day 01 review (17 findings) + Day 03 architect approval | — | Day 03 commit |
 | F-001 | Session lifecycle & state machine | P0 | FR-S1–S6, BR-1–3, AC-02, AC-08, AC-29 | 07 | Tier 2 | REVIEWED (UI and manual checks pending, Day 13/27) | src/core/session/*, src/shell/engine/*, src/shell/boot.ts, src/shell/messaging/router.ts | 903 tests total; e2e:session 35/35 | 1 review + re-check Day 07 (APPROVE) | F-010 | Day 07 commits |
-| F-002 | Natural-language task parser | P0 | FR-T1–T4, AC-01 | 08 | Tier 2 | NOT_STARTED | — | — | — | F-001 | — |
+| F-002 | Natural-language task parser | P0 | FR-T1–T4, BR-5, AC-01 | 08 | Tier 2 | REVIEWED (UI pending Day 13) | src/core/parser/*, src/core/exclusions/sensitive.ts | 1,246 tests total; 118 fixtures; AC-01 in real Chrome | 1 review + re-check Day 08 (APPROVE) | F-001 | Day 08 commits |
 | F-003 | Tab/window activity monitor | P0 | FR-M1, M2, M4, M5, M7, M9, AC-17, 18, 20, 21 | 09 | Tier 2 | NOT_STARTED | — | — | — | F-001, threat model | — |
 | F-004 | Idle-state detection | P0 | FR-M3, AC-19 | 10 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |
 | F-005 | Sensitive-site exclusions | P0 | FR-M6, AC-09 | 09–11 | Tier 2 | NOT_STARTED | — | — | — | F-003 | — |

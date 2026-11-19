@@ -35,3 +35,6 @@ Date,Development day,Agent,Model,Task,Input tokens,Output tokens,Estimated cost,
 2026-11-16,7,Session reviewer (subagent),opus (exact version unknown),Day 7 Session C review + re-check,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES then APPROVE; round 1 interrupted by a usage limit and resumed; 162842 and 203199 tokens reported"
 2026-11-16,7,Session implementer (subagent),opus (exact version unknown),Day 7 Session C fix rounds (4),unknown,unknown,unknown,unknown,"Completed; 417162 / 424903 / 434531 tokens reported (cumulative or not: unknown)"
 2026-11-16,7,Orchestrator,claude-fable-5-2,Day 7 Session C decisions D-023 verification logs commit,unknown,unknown,unknown,unknown,Completed
+2026-11-18,8,Orchestrator,claude-opus-5,Day 8 Sessions A-C spec probes decisions D-024..D-027,unknown,unknown,unknown,unknown,Completed
+2026-11-18,8,Parser implementer (subagent),opus (exact version unknown),Day 8 parser + 4 fix rounds,unknown,unknown,unknown,unknown,"Completed; 297254 / 387560 / 469142 / 501459 tokens reported (cumulative or not: unknown)"
+2026-11-18,8,Parser reviewer (subagent),opus (exact version unknown),Day 8 review + re-check,unknown,unknown,unknown,unknown,"APPROVE WITH CHANGES then APPROVE; re-check interrupted by a usage limit and resumed; 201029 and 270651 tokens reported"

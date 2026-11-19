@@ -15,17 +15,18 @@
 - [x] D05 ADR-0007, scaffold, guards, CI, platform facts V1–V8, review + re-check
 - [x] D06 Storage layer (validators, repositories, openStorage, deleteAll), review + re-check
 - [x] D07 Session state machine, engine, reconciliation, router; AC-02 e2e; review + re-check
+- [x] D08 Task parser, site dictionary, parse.intent, 118 fixtures; review + re-check (AC-01)
 
-## Waiting on owner (none block Day 06)
+## Waiting on owner (none block Day 09)
 - [ ] Remaining manual checks: M2, M4, M5, M8, M11, M13, M16–M19, and M7 with system volume muted. Needs macOS notifications for Chrome turned on
 - [ ] Android device available? (PRD OQ-5). Needed before Day 22
 - [ ] Approve downloading Chrome for Testing 120 (M22; the Day 05 check was skipped without it)
 - [ ] M20 (V7 focus) and M21 (toolbar colours) in `tests/manual/OWNER_CHECKS.md`
 
-## Next (Day 08 — goals, contexts, parser)
-- [ ] D08-A1 Task model and parser spec: durations (`3 hours`, `90 min`, `1.5h`, `until 5pm`), known-site dictionary (≥ 30), objective and subject extraction, warnings (BR-5)
-- [ ] D08-B1 Pure parser + `parse.intent` command; session form logic (draft validation already exists)
-- [ ] D08-C1 Parser fixtures (AC-01 and ≥ 40 sentences), independent review
+## Next (Day 09 — activity monitoring)
+- [ ] D09-A1 Observation pipeline design detail: event sources, dedup, rate limit, incognito, placeholder titles (FR-M1, M2, M5, M7, M9)
+- [ ] D09-B1 Tabs/windows adapter + pipeline wired to the engine; segments written; `obsKey` hashing; the injection adapter that awaits `readyHardened` (R7)
+- [ ] D09-C1 AC-17/18/20/21 tests incl. real-Chrome multi-window checks; `data.deleteAll` steps 1-3 and 7; independent review
 
 ## Carry-over
 - Day 10: deterministic idle e2e (15 s threshold) covering the restart test's idle case; real lock check stays manual.

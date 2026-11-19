@@ -10,12 +10,12 @@ import type { Mode } from "../types";
 import { LIMITS, validateSessionConfig } from "../storage/validate";
 import type { SessionDraft } from "../session/types";
 import { expandLead, findDuration } from "./duration";
-import { buildKeywords, KEYWORDS_MAX } from "./keywords";
+import { buildKeywords } from "./keywords";
 import { buildLabel } from "./label";
 import { findObjective } from "./objective";
 import { deriveSubject } from "./subject";
 import { buildLookup, findSites, SITES } from "./sites";
-import { blank, normalise, stripOrphanPunctuation } from "./text";
+import { blank, normalise, stripOrphanPunctuation, toLowerAligned } from "./text";
 import {
   WARNING_ORDER,
   WARNING_VALUE_MAX,
@@ -123,18 +123,23 @@ function safeDraft(ctx: ParseCtx): SessionDraft {
 }
 
 /**
- * The label with any sensitive site name removed (review F17). The label text comes
- * from `clean`, so the spans are found by index when the label is a slice of it, and
- * by text otherwise (a fallback label).
+ * The keyword source for a label, with any sensitive site name removed (review F17).
+ * It blanks by index, like every other span handling here (D-027): the label is
+ * located inside `clean` and the overlapping sensitive spans are blanked there, so
+ * the text can never be cut in the middle of a word.
  */
 function withoutSensitive(clean: string, label: string, sensitiveSpans: readonly Span[]): string {
   if (sensitiveSpans.length === 0) return label;
-  let out = label;
-  for (const span of sensitiveSpans) {
-    const name = clean.slice(span.start, span.end);
-    if (name.length > 0) out = out.split(name).join(" ");
+  const at = clean.indexOf(label);
+  if (at < 0) {
+    // A fallback label is not a slice of the sentence: keep only its words that no
+    // sensitive span contains.
+    const names = sensitiveSpans.map((span) => toLowerAligned(clean.slice(span.start, span.end)));
+    const kept = label.split(" ").filter((word) => !names.some((name) => toLowerAligned(word).includes(name)));
+    return stripOrphanPunctuation(kept.join(" "));
   }
-  return stripOrphanPunctuation(out);
+  const shifted = sensitiveSpans.map((span) => ({ start: span.start - at, end: span.end - at }));
+  return stripOrphanPunctuation(blank(label, shifted));
 }
 
 /** The dictionary lookup is built once: the bundled dictionary never changes. */
@@ -208,7 +213,7 @@ export function parseIntent(text: string, ctx: ParseCtx): ParseResult {
           blank(clean, [...quiet, ...sites.sensitiveSpans]).slice(objectiveSpan.start, objectiveSpan.end),
         );
   const keywords = buildKeywords(keywordLabel, keywordObjective, subject);
-  if (keywords.truncated) found.push(warning("keywords_truncated", { count: KEYWORDS_MAX }));
+  if (keywords.truncated) found.push(warning("keywords_truncated", { count: keywords.found }));
 
   // ---- 8. validate and clamp ----
   if (duration.minutes === null && duration.warnings.length === 0) found.push(warning("duration_defaulted"));

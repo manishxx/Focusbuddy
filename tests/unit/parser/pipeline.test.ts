@@ -195,7 +195,8 @@ describe("the pipeline never returns an invalid draft (§10)", () => {
     const keywords = parseIntent(`revise ${many} for 1 hour`, ctx()).warnings.find(
       (w) => w.code === "keywords_truncated",
     );
-    expect(keywords?.data?.count).toBe(12);
+    // The candidate count, not the cap (D-027).
+    expect(keywords?.data?.count).toBeGreaterThan(12);
   });
 
   it("truncates text longer than 1,000 characters when called directly (M24)", () => {
